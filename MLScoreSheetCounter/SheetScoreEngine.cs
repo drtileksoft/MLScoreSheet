@@ -81,8 +81,14 @@ public static class SheetScoreEngine
         var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH); // vracíme v overlay
 
         var pList = new float[tpl.Rects.Count];
+        //for (int i = 0; i < tpl.Rects.Count; i++)
+        //    pList[i] = FillRatioFromRoi(warped, tpl.Rects[i], padFrac, openFrac);
+
+        //for (int i = 0; i < tpl.Rects.Count; i++)
+        //    pList[i] = (float)(GetFillPercent(warped /*ne overlay!*/, tpl.Rects[i]) / 100.0);
+
         for (int i = 0; i < tpl.Rects.Count; i++)
-            pList[i] = FillRatioFromRoi(warped, tpl.Rects[i], padFrac, openFrac);
+            pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i]) / 100.0);
 
         float thr = autoThreshold ? AutoThresholdKMeans(pList, autoMin, autoMax, fixedThreshold, 0.12f)
                                   : fixedThreshold;
@@ -113,6 +119,216 @@ public static class SheetScoreEngine
         };
 
     }
+
+    // % černé s lokálním kontrastem (stínuvzdorné)
+    static double GetFillPercentLocalContrast(SKBitmap src, SKRectI rect)
+    {
+        // 0) ignoruj rámeček – zarovnej 12 % z každé strany (klidně zvedni na 0.18)
+        int ix = Math.Max(1, (int)Math.Round(rect.Width * 0.12));
+        int iy = Math.Max(1, (int)Math.Round(rect.Height * 0.12));
+        var r = new SKRectI(rect.Left + ix, rect.Top + iy, rect.Right - ix, rect.Bottom - iy);
+        if (r.Width <= 2 || r.Height <= 2) return 0;
+
+        using var roi = new SKBitmap(r.Width, r.Height, src.ColorType, src.AlphaType);
+        using (var cc = new SKCanvas(roi)) cc.DrawBitmap(src, r, new SKRect(0, 0, r.Width, r.Height));
+        using var pm = new SKPixmap(roi.Info, roi.GetPixels(out _));
+
+        // 1) histogram TEMNOSTI (dark = 255 - luminance)
+        Span<int> hist = stackalloc int[256]; hist.Clear();
+        int total = roi.Width * roi.Height;
+        unsafe
+        {
+            byte* p = (byte*)pm.GetPixels();
+            int bpp = pm.Info.BytesPerPixel; // RGBA8888 => 4
+            for (int y = 0; y < roi.Height; y++)
+            {
+                byte* row = p + y * pm.RowBytes;
+                for (int x = 0; x < roi.Width; x++)
+                {
+                    byte B = row[x * bpp + 0], G = row[x * bpp + 1], R = row[x * bpp + 2];
+                    int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
+                    int d = 255 - y8;           // temnost
+                    hist[d]++;
+                }
+            }
+        }
+
+        // 2) robustní min/max z percentilů (např. 5. a 95.)
+        int pLo = PercentileFromHist(hist, total, 0.05);
+        int pHi = PercentileFromHist(hist, total, 0.95);
+        if (pHi <= pLo) { pLo = Math.Max(0, pLo - 1); pHi = Math.Min(255, pLo + 1); }
+        double range = pHi - pLo;
+
+        // 3) druhý průchod: normalizace na 0..255 a histogram pro Otsu
+        Span<int> histN = stackalloc int[256]; histN.Clear();
+        int blacks = 0; // vyplníme až po určení prahu
+        unsafe
+        {
+            using var pm2 = new SKPixmap(roi.Info, roi.GetPixels(out _));
+            byte* p = (byte*)pm2.GetPixels();
+            int bpp = pm2.Info.BytesPerPixel;
+            for (int y = 0; y < roi.Height; y++)
+            {
+                byte* row = p + y * pm2.RowBytes;
+                for (int x = 0; x < roi.Width; x++)
+                {
+                    byte B = row[x * bpp + 0], G = row[x * bpp + 1], R = row[x * bpp + 2];
+                    int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
+                    int d = 255 - y8;
+                    // kontrastní roztažení podle lokálního min/max
+                    double dn = (d - pLo) / range;
+                    if (dn < 0) dn = 0; else if (dn > 1) dn = 1;
+                    int q = (int)Math.Round(dn * 255.0);
+                    histN[q]++;
+                }
+            }
+        }
+
+        // 4) Otsu na normalizovaném histogramu → práh qThr (0..255)
+        int qThr = OtsuThreshold(histN, total);
+
+        // 5) finální spočtení podílu "černých" (>= práh) v jedné smyčce
+        unsafe
+        {
+            using var pm3 = new SKPixmap(roi.Info, roi.GetPixels(out _));
+            byte* p = (byte*)pm3.GetPixels();
+            int bpp = pm3.Info.BytesPerPixel;
+            for (int y = 0; y < roi.Height; y++)
+            {
+                byte* row = p + y * pm3.RowBytes;
+                for (int x = 0; x < roi.Width; x++)
+                {
+                    byte B = row[x * bpp + 0], G = row[x * bpp + 1], R = row[x * bpp + 2];
+                    int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
+                    int d = 255 - y8;
+                    double dn = (d - pLo) / range;
+                    if (dn < 0) dn = 0; else if (dn > 1) dn = 1;
+                    int q = (int)Math.Round(dn * 255.0);
+                    if (q >= qThr) blacks++;
+                }
+            }
+        }
+
+        double pct = 100.0 * blacks / Math.Max(1, total);
+        if (double.IsNaN(pct)) pct = 0;
+        if (pct < 0) pct = 0; else if (pct > 100) pct = 100;
+        return pct;
+
+        // ---- lokální pomocné funkce ----
+        static int PercentileFromHist(Span<int> h, int tot, double p)
+        {
+            int target = (int)Math.Round(p * tot);
+            int cum = 0;
+            for (int i = 0; i < 256; i++) { cum += h[i]; if (cum >= target) return i; }
+            return 255;
+        }
+        static int OtsuThreshold(Span<int> h, int tot)
+        {
+            double sum = 0; for (int t = 0; t < 256; t++) sum += t * h[t];
+            double sumB = 0; int wB = 0; double varMax = -1; int thr = 128;
+            for (int t = 0; t < 256; t++)
+            {
+                wB += h[t]; if (wB == 0) continue;
+                int wF = tot - wB; if (wF == 0) break;
+                sumB += t * h[t];
+                double mB = sumB / wB, mF = (sum - sumB) / wF;
+                double varBetween = wB * wF * (mB - mF) * (mB - mF);
+                if (varBetween > varMax) { varMax = varBetween; thr = t; }
+            }
+            return thr;
+        }
+    }
+
+
+    // --- Robustní % černé pro jeden box ---
+    static double GetFillPercent(SKBitmap src, SKRectI rect)
+    {
+        // 1) Ořez okrajů (rámeček/linky) ~12 % z každé strany
+        int insetX = Math.Max(1, (int)Math.Round(rect.Width * 0.12));
+        int insetY = Math.Max(1, (int)Math.Round(rect.Height * 0.12));
+        var r = new SKRectI(
+            rect.Left + insetX, rect.Top + insetY,
+            rect.Right - insetX, rect.Bottom - insetY
+        );
+        if (r.Width <= 2 || r.Height <= 2) return 0;
+
+        using var sub = new SKBitmap(r.Width, r.Height, src.ColorType, src.AlphaType);
+        using (var c = new SKCanvas(sub))
+            c.DrawBitmap(src, r, new SKRect(0, 0, r.Width, r.Height));
+
+        // 2) Grayscale (luminance) a TEMNOST (255 - Y)
+        using var pm = new SKPixmap(sub.Info, sub.GetPixels(out _));
+        Span<byte> dark = pm.GetPixelSpan().Length == 0
+            ? new byte[0]
+            : new byte[sub.Width * sub.Height];
+
+        int idx = 0;
+        unsafe
+        {
+            byte* p = (byte*)pm.GetPixels();
+            int bpp = pm.Info.BytesPerPixel; // RGBA8888 => 4
+            for (int y = 0; y < sub.Height; y++)
+            {
+                byte* row = p + y * pm.RowBytes;
+                for (int x = 0; x < sub.Width; x++)
+                {
+                    byte B = row[x * bpp + 0];
+                    byte G = row[x * bpp + 1];
+                    byte R = row[x * bpp + 2];
+                    // Rec. 709 luminance ≈ 0.2126 R + 0.7152 G + 0.0722 B
+                    int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
+                    byte d = (byte)(255 - y8); // TEMNOST = čím větší, tím černější
+                    dark[idx++] = d;
+                }
+            }
+        }
+
+        if (dark.Length == 0) return 0;
+
+        // 3) Otsu práh na TEMNOSTI (robustní vůči stínu)
+        Span<int> hist = stackalloc int[256];
+        for (int i = 0; i < dark.Length; i++) hist[dark[i]]++;
+
+        int total = dark.Length;
+        double sum = 0;
+        for (int t = 0; t < 256; t++) sum += t * hist[t];
+
+        double sumB = 0;
+        int wB = 0;
+        double varMax = -1;
+        int thr = 128;
+
+        for (int t = 0; t < 256; t++)
+        {
+            wB += hist[t];
+            if (wB == 0) continue;
+            int wF = total - wB;
+            if (wF == 0) break;
+
+            sumB += t * hist[t];
+            double mB = sumB / wB;
+            double mF = (sum - sumB) / wF;
+            double varBetween = wB * wF * (mB - mF) * (mB - mF);
+            if (varBetween > varMax)
+            {
+                varMax = varBetween;
+                thr = t;
+            }
+        }
+
+        // 4) Podíl "černých" pixelů (temnost >= práh)
+        int black = 0;
+        for (int i = 0; i < dark.Length; i++)
+            if (dark[i] >= thr) black++;
+
+        double pct = 100.0 * black / total;
+
+        // 5) Bezpečné ořezání intervalu
+        if (double.IsNaN(pct) || pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        return pct;
+    }
+
 
     private static string SavePng(SKBitmap bmp, string name)
     {
@@ -868,8 +1084,8 @@ public static class SheetScoreEngine
             var blue = new SKPaint { Color = new SKColor(70, 130, 240), Style = SKPaintStyle.Stroke, StrokeWidth = 2.5f, PathEffect = SKPathEffect.CreateDash(new float[] { 6, 6 }, 0), IsAntialias = true };
 
             // texty
-            var txt = new SKPaint { Color = SKColors.White, TextSize = 16, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) };
-            var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 180), TextSize = 16, IsAntialias = true, Typeface = txt.Typeface };
+            var txt = new SKPaint { Color = SKColors.Blue, TextSize = 30, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) };
+            var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 180), TextSize = 30, IsAntialias = true, Typeface = txt.Typeface };
 
             // 2.1 rámečky šestic
             foreach (var g in groups)
@@ -893,16 +1109,23 @@ public static class SheetScoreEngine
                 // popisky: index, % fill, slot 0..5
                 string idxLabel = $"#{i}";
                 string fillLabel = $"{Math.Round(pList[i] * 100)}%";
+                // ukazovat jen kdyz {Math.Round(pList[i] * 100)} je vic nez 50%?
+                bool showFill = Math.Round(pList[i] * 100) > 50;
+
+
                 string slotLabel = slotByIndex[i] >= 0 ? slotByIndex[i].ToString() : "?";
 
                 // umístění: index vlevo nahoře, % vpravo dole, slot doprostřed
-                DrawText(c, idxLabel, r.Left + 2, r.Top + 14, txt, shadow);
-                DrawText(c, fillLabel, r.Right - 2 - txt.MeasureText(fillLabel), r.Bottom - 4, txt, shadow);
+                if (showFill)
+                {
+                    DrawText(c, idxLabel, r.Left - 35, r.Top - 5, txt, shadow);
+                    DrawText(c, fillLabel, r.Right + 35 - txt.MeasureText(fillLabel), r.Bottom + 10, txt, shadow);
+                }
                 // slot center
                 float cx = r.Left + r.Width * 0.5f;
                 float cy = r.Top + r.Height * 0.55f;
-                var slotPaint = new SKPaint { Color = isWin ? green.Color : red.Color, TextSize = 20, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Normal) };
-                var slotShadow = new SKPaint { Color = new SKColor(0, 0, 0, 200), TextSize = 20, IsAntialias = true, Typeface = slotPaint.Typeface };
+                var slotPaint = new SKPaint { Color = isWin ? green.Color : red.Color, TextSize = 40, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Normal) };
+                var slotShadow = new SKPaint { Color = new SKColor(0, 0, 0, 200), TextSize = 40, IsAntialias = true, Typeface = slotPaint.Typeface };
                 float sw = slotPaint.MeasureText(slotLabel);
                 DrawText(c, slotLabel, cx - sw / 2, cy, slotPaint, slotShadow);
             }

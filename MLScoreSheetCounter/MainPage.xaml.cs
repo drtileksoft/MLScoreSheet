@@ -89,14 +89,22 @@ public partial class MainPage : ContentPage
 
 
             // 2) Debug overlay:
-            using var res = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(photo, fixedThreshold: 0.74f, autoThreshold: false);
+            using var res = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(photo, fixedThreshold: 0.72f, autoThreshold: false);
 
+            try
+            {
+                var path = Path.Combine(FileSystem.CacheDirectory, $"overlay_warped_{Guid.NewGuid().ToString("N")}.png");
+                using (var img = SKImage.FromBitmap(res.Overlay))
+                using (var data = img.Encode(SKEncodedImageFormat.Png, 95))
+                using (var fs = File.Create(path)) data.SaveTo(fs);
+                Preview.Source = ImageSource.FromFile(path);
+            }
+            catch( Exception ex)
+            {
+                await DisplayAlert("Chyba", ex.Message, "OK");
+            }
 
-            var path = Path.Combine(FileSystem.CacheDirectory, "overlay_warpedXX.png");
-            using (var img = SKImage.FromBitmap(res.Overlay))
-            using (var data = img.Encode(SKEncodedImageFormat.Png, 95))
-            using (var fs = File.Create(path)) data.SaveTo(fs);
-            Preview.Source = ImageSource.FromFile(path);
+            //Preview.Source = ImageSource.FromStream(res.Overlay);
 
             ResultLabel.Text = $"TOTAL = {res.Total}";
         }
