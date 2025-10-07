@@ -54,10 +54,15 @@ public class PinchToZoomContainer : ContentView
         {
             case GestureStatus.Started:
                 _startScale = Content.Scale;
-                Content.AnchorX = 0;
-                Content.AnchorY = 0;
+                Content.AnchorX = e.ScaleOrigin.X;
+                Content.AnchorY = e.ScaleOrigin.Y;
                 break;
             case GestureStatus.Running:
+                if (Width <= 0 || Height <= 0 || Content.Width <= 0 || Content.Height <= 0)
+                {
+                    return;
+                }
+
                 var targetScale = Math.Clamp(_startScale * e.Scale, 1, MaxZoomScale);
 
                 var renderedX = Content.X + _xOffset;
@@ -82,6 +87,9 @@ public class PinchToZoomContainer : ContentView
             case GestureStatus.Completed:
                 _xOffset = Content.TranslationX;
                 _yOffset = Content.TranslationY;
+                _currentScale = Content.Scale;
+                Content.AnchorX = 0.5;
+                Content.AnchorY = 0.5;
                 break;
         }
     }
