@@ -120,6 +120,18 @@ public static class SheetScoreEngine
     // % černé s lokálním kontrastem (stínuvzdorné)
     static double GetFillPercentLocalContrast(SKBitmap src, SKRectI rect)
     {
+        // trochu rozšíříme výřez, aby histogram zachytil i okolní čáry/okraje
+        const int margin = 3;
+        var expanded = new SKRectI(
+            Math.Max(0, rect.Left - margin),
+            Math.Max(0, rect.Top - margin),
+            Math.Min(src.Width, rect.Right + margin),
+            Math.Min(src.Height, rect.Bottom + margin)
+        );
+        if (expanded.Width <= 0 || expanded.Height <= 0)
+            return 0;
+        rect = expanded;
+
         // 0) ignoruj rámeček – zarovnej 12 % z každé strany (klidně zvedni na 0.18)
         int ix = Math.Max(1, (int)Math.Round(rect.Width * 0.12));
         int iy = Math.Max(1, (int)Math.Round(rect.Height * 0.12));
