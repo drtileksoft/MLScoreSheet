@@ -10,6 +10,8 @@ public class PinchToZoomContainer : ContentView
     private double _startScale = 1;
     private double _xOffset;
     private double _yOffset;
+    private double _startX;
+    private double _startY;
 
     public PinchToZoomContainer()
     {
@@ -32,6 +34,8 @@ public class PinchToZoomContainer : ContentView
         _startScale = 1;
         _xOffset = 0;
         _yOffset = 0;
+        _startX = 0;
+        _startY = 0;
 
         if (Content != null)
         {
@@ -53,9 +57,11 @@ public class PinchToZoomContainer : ContentView
         switch (e.Status)
         {
             case GestureStatus.Started:
-                _startScale = Content.Scale;
-                Content.AnchorX = e.ScaleOrigin.X;
-                Content.AnchorY = e.ScaleOrigin.Y;
+                _startScale = _currentScale = Content.Scale;
+                _startX = _xOffset = Content.TranslationX;
+                _startY = _yOffset = Content.TranslationY;
+                Content.AnchorX = 0.5;
+                Content.AnchorY = 0.5;
                 break;
             case GestureStatus.Running:
                 if (Width <= 0 || Height <= 0 || Content.Width <= 0 || Content.Height <= 0)
@@ -65,31 +71,28 @@ public class PinchToZoomContainer : ContentView
 
                 var targetScale = Math.Clamp(_startScale * e.Scale, 1, MaxZoomScale);
 
-                var renderedX = Content.X + _xOffset;
-                var deltaX = renderedX / Width;
-                var deltaWidth = Width / (Content.Width * _startScale);
-                var originX = (e.ScaleOrigin.X - deltaX) * deltaWidth;
+                var focusX = (e.ScaleOrigin.X - 0.5) * Width;
+                var focusY = (e.ScaleOrigin.Y - 0.5) * Height;
+                var scaleDelta = targetScale / _startScale;
 
-                var renderedY = Content.Y + _yOffset;
-                var deltaY = renderedY / Height;
-                var deltaHeight = Height / (Content.Height * _startScale);
-                var originY = (e.ScaleOrigin.Y - deltaY) * deltaHeight;
+                var targetX = _startX - focusX * (scaleDelta - 1);
+                var targetY = _startY - focusY * (scaleDelta - 1);
 
-                var targetX = _xOffset - (originX * Content.Width) * (targetScale - _startScale);
-                var targetY = _yOffset - (originY * Content.Height) * (targetScale - _startScale);
+                var maxX = GetMaxTranslationX(targetScale);
+                var maxY = GetMaxTranslationY(targetScale);
 
-                Content.TranslationX = Clamp(targetX, -GetMaxTranslationX(targetScale), GetMaxTranslationX(targetScale));
-                Content.TranslationY = Clamp(targetY, -GetMaxTranslationY(targetScale), GetMaxTranslationY(targetScale));
+                Content.TranslationX = Clamp(targetX, -maxX, maxX);
+                Content.TranslationY = Clamp(targetY, -maxY, maxY);
                 Content.Scale = targetScale;
 
+                _xOffset = Content.TranslationX;
+                _yOffset = Content.TranslationY;
                 _currentScale = targetScale;
                 break;
             case GestureStatus.Completed:
                 _xOffset = Content.TranslationX;
                 _yOffset = Content.TranslationY;
                 _currentScale = Content.Scale;
-                Content.AnchorX = 0.5;
-                Content.AnchorY = 0.5;
                 break;
         }
     }
