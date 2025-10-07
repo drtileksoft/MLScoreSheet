@@ -1,6 +1,7 @@
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using SkiaSharp;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using MLScoreSheetCounter.Services;
@@ -12,13 +13,44 @@ public partial class MainPage : ContentPage
 {
     private readonly IGallerySaver _gallerySaver;
     private string? _lastImagePath;
-    private const float CrossedThreshold = 0.30f;
-
     public MainPage()
     {
         InitializeComponent();
         _gallerySaver = ServiceHelper.GetRequiredService<IGallerySaver>();
+        UpdateThresholdLabels();
     }
+
+    private float GetCalculationThreshold() => (float)(CalculationTresholdSlider?.Value ?? 0.30);
+
+    private float GetVisibilityThreshold() => (float)(VisibilityTresholdSlider?.Value ?? 0.30);
+
+    private void OnCalculationThresholdChanged(object sender, ValueChangedEventArgs e) => UpdateThresholdLabels();
+
+    private void OnVisibilityThresholdChanged(object sender, ValueChangedEventArgs e) => UpdateThresholdLabels();
+
+    private void UpdateThresholdLabels()
+    {
+        void UpdateLabel(Label? label, double value)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            label.Text = FormatThresholdValue(value);
+        }
+
+        var calcValue = CalculationTresholdSlider?.Value ?? 0.30;
+        var visibilityValue = VisibilityTresholdSlider?.Value ?? 0.30;
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            UpdateLabel(CalculationThresholdValueLabel, calcValue);
+            UpdateLabel(VisibilityThresholdValueLabel, visibilityValue);
+        });
+    }
+
+    private static string FormatThresholdValue(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
 
     private void SetProcessingState(bool isProcessing)
     {
@@ -132,6 +164,8 @@ public partial class MainPage : ContentPage
         {
             ResetPreview();
             var showOverlay = OverlayCheckBox?.IsChecked ?? false;
+            var calculationThreshold = GetCalculationThreshold();
+            var visibilityThreshold = GetVisibilityThreshold();
 
             if (showOverlay)
             {
@@ -140,8 +174,9 @@ public partial class MainPage : ContentPage
                     using var photoWithOverlay = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
                         photoWithOverlay,
-                        fixedThreshold: CrossedThreshold,
-                        autoThreshold: false);
+                        fixedThreshold: calculationThreshold,
+                        autoThreshold: false,
+                        overlayVisibilityThreshold: visibilityThreshold);
                 });
 
                 ResultLabel.Text = $"TOTAL = {res.Total}";
@@ -164,7 +199,7 @@ public partial class MainPage : ContentPage
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
                         photo,
-                        fixedThreshold: CrossedThreshold,
+                        fixedThreshold: calculationThreshold,
                         autoThreshold: false);
                 });
 

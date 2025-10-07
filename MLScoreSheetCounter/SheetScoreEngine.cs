@@ -70,7 +70,8 @@ public static class SheetScoreEngine
         float autoMin = 0.25f,
         float autoMax = 0.65f,
         float padFrac = 0.08f,
-        float openFrac = 0.03f)
+        float openFrac = 0.03f,
+        float overlayVisibilityThreshold = 0.30f)
     {
         //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
         using var photo = DecodeLandscapePhoto(photoStream);
@@ -101,7 +102,8 @@ public static class SheetScoreEngine
             tpl.Rects,
             pList,
             res.WinnerIndices,
-            groups
+            groups,
+            overlayVisibilityThreshold
         );
 
         // ... návratová hodnota:
@@ -1058,7 +1060,8 @@ public static class SheetScoreEngine
         List<SKRectI> rects,
         float[] pList,
         IList<int> winnerIndices,
-        List<Group> groups)
+        List<Group> groups,
+        float visibilityThreshold)
     {
         // Připrav mapu slotu 0..5 pro každý index (kvůli číslici v boxu)
         var slotByIndex = Enumerable.Repeat(-1, rects.Count).ToArray();
@@ -1189,8 +1192,8 @@ public static class SheetScoreEngine
                 // popisky: index, % fill, slot 0..5
                 string idxLabel = $"#{i}";
                 string fillLabel = $"{Math.Round(pList[i] * 100)}%";
-                // ukazovat jen kdyz {Math.Round(pList[i] * 100)} je vic nez 30%?
-                bool showFill = pList[i] > 0.30f;
+                // ukazovat jen kdyz hodnota prekroci viditelnostni prah
+                bool showFill = pList[i] > visibilityThreshold;
 
 
                 string slotLabel = slotByIndex[i] >= 0 ? slotByIndex[i].ToString() : "?";
