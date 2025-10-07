@@ -1052,6 +1052,26 @@ public static class SheetScoreEngine
 
         var winners = new HashSet<int>(winnerIndices);
 
+        const int tablesPerRowBlock = 2;
+        const int rowsPerTable = 5;
+        const int colsPerTable = 3;
+        const int totalTables = tablesPerRowBlock * 2;
+        const int groupsPerRowPair = colsPerTable * tablesPerRowBlock; // očekáváme 6 šestic v jednom řádku tabulek
+
+        var rowSums = new int[totalTables, rowsPerTable];
+        var colSums = new int[totalTables, colsPerTable];
+        var tableTotals = new int[totalTables];
+
+        var rowBounds = new SKRect[totalTables, rowsPerTable];
+        var colBounds = new SKRect[totalTables, colsPerTable];
+        var tableBounds = new SKRect[totalTables];
+        var rowHas = new bool[totalTables, rowsPerTable];
+        var colHas = new bool[totalTables, colsPerTable];
+        var tableHas = new bool[totalTables];
+
+        var groupWidths = new List<float>();
+        var groupHeights = new List<float>();
+
         // ---------- Overlay na WARPED ----------
         var visWarp = warped.Copy();
         using (var c = new SKCanvas(visWarp))
@@ -1065,15 +1085,82 @@ public static class SheetScoreEngine
             var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 180), TextSize = 30, IsAntialias = true, Typeface = txt.Typeface };
 
             // 2.1 rámečky šestic
-            foreach (var g in groups)
+            for (int gi = 0; gi < groups.Count; gi++)
             {
+                var g = groups[gi];
                 // union 6ti rectů
                 var rs = g.Indices.Select(i => rects[i]).ToArray();
                 int minX = rs.Min(r => r.Left), minY = rs.Min(r => r.Top);
                 int maxX = rs.Max(r => r.Right), maxY = rs.Max(r => r.Bottom);
                 var pad = 3;
-                var R = new SKRect(minX - pad, minY - pad, maxX + pad, maxY + pad);
-                c.DrawRect(R, blue);
+                var groupRect = new SKRect(minX - pad, minY - pad, maxX + pad, maxY + pad);
+                c.DrawRect(groupRect, blue);
+
+                if (groupsPerRowPair <= 0) continue;
+
+                int rowPairIndex = gi / groupsPerRowPair;
+                int posInPair = gi % groupsPerRowPair;
+
+                int tableRowBlock = rowPairIndex / rowsPerTable;
+                int rowInTable = rowPairIndex % rowsPerTable;
+                int tableColBlock = posInPair / colsPerTable;
+                int colInTable = posInPair % colsPerTable;
+
+                if (tableRowBlock >= 2 || tableColBlock >= tablesPerRowBlock)
+                    continue;
+
+                int tableIndex = tableRowBlock * tablesPerRowBlock + tableColBlock;
+                if (tableIndex < 0 || tableIndex >= totalTables)
+                    continue;
+
+                groupWidths.Add(groupRect.Width);
+                groupHeights.Add(groupRect.Height);
+
+                if (!rowHas[tableIndex, rowInTable])
+                {
+                    rowBounds[tableIndex, rowInTable] = groupRect;
+                    rowHas[tableIndex, rowInTable] = true;
+                }
+                else
+                    rowBounds[tableIndex, rowInTable] = SKRect.Union(rowBounds[tableIndex, rowInTable], groupRect);
+
+                if (!colHas[tableIndex, colInTable])
+                {
+                    colBounds[tableIndex, colInTable] = groupRect;
+                    colHas[tableIndex, colInTable] = true;
+                }
+                else
+                    colBounds[tableIndex, colInTable] = SKRect.Union(colBounds[tableIndex, colInTable], groupRect);
+
+                if (!tableHas[tableIndex])
+                {
+                    tableBounds[tableIndex] = groupRect;
+                    tableHas[tableIndex] = true;
+                }
+                else
+                    tableBounds[tableIndex] = SKRect.Union(tableBounds[tableIndex], groupRect);
+
+                bool hasWinner = false;
+                int groupScore = 0;
+                for (int s = 0; s < g.Indices.Length; s++)
+                {
+                    int idx = g.Indices[s];
+                    if (winners.Contains(idx))
+                    {
+                        hasWinner = true;
+                        int slot = slotByIndex[idx];
+                        if (slot >= 0)
+                            groupScore = g.ValueOf(slot);
+                        break;
+                    }
+                }
+
+                if (hasWinner)
+                {
+                    rowSums[tableIndex, rowInTable] += groupScore;
+                    colSums[tableIndex, colInTable] += groupScore;
+                    tableTotals[tableIndex] += groupScore;
+                }
             }
 
             // 2.2 boxy + popisky
@@ -1105,6 +1192,77 @@ public static class SheetScoreEngine
                 var slotShadow = new SKPaint { Color = new SKColor(0, 0, 0, 200), TextSize = 40, IsAntialias = true, Typeface = slotPaint.Typeface };
                 float sw = slotPaint.MeasureText(slotLabel);
                 DrawText(c, slotLabel, cx - sw / 2, cy, slotPaint, slotShadow);
+            }
+
+            if (groupWidths.Count > 0 && groupHeights.Count > 0)
+            {
+                float avgWidth = groupWidths.Average();
+                float avgHeight = groupHeights.Average();
+                float rowOffset = Math.Max(40f, avgWidth * 0.55f);
+                float colOffset = Math.Max(35f, avgHeight * 0.65f);
+
+                using var sumPaint = new SKPaint
+                {
+                    Color = new SKColor(255, 230, 90),
+                    TextSize = Math.Max(36f, avgHeight * 0.65f),
+                    IsAntialias = true,
+                    Typeface = txt.Typeface
+                };
+                using var sumShadow = new SKPaint
+                {
+                    Color = new SKColor(0, 0, 0, 200),
+                    TextSize = sumPaint.TextSize,
+                    IsAntialias = true,
+                    Typeface = txt.Typeface
+                };
+                using var totalPaint = new SKPaint
+                {
+                    Color = new SKColor(255, 255, 255),
+                    TextSize = sumPaint.TextSize * 1.15f,
+                    IsAntialias = true,
+                    Typeface = txt.Typeface
+                };
+                using var totalShadow = new SKPaint
+                {
+                    Color = new SKColor(0, 0, 0, 220),
+                    TextSize = totalPaint.TextSize,
+                    IsAntialias = true,
+                    Typeface = txt.Typeface
+                };
+
+                for (int table = 0; table < totalTables; table++)
+                {
+                    if (!tableHas[table]) continue;
+
+                    for (int r = 0; r < rowsPerTable; r++)
+                    {
+                        if (!rowHas[table, r]) continue;
+                        int value = rowSums[table, r];
+                        string text = value.ToString();
+                        var bounds = rowBounds[table, r];
+                        float x = bounds.Right + rowOffset;
+                        float y = bounds.MidY + sumPaint.TextSize * 0.35f;
+                        DrawText(c, text, x, y, sumPaint, sumShadow);
+                    }
+
+                    for (int col = 0; col < colsPerTable; col++)
+                    {
+                        if (!colHas[table, col]) continue;
+                        int value = colSums[table, col];
+                        string text = value.ToString();
+                        var bounds = colBounds[table, col];
+                        float textWidth = sumPaint.MeasureText(text);
+                        float x = bounds.MidX - textWidth * 0.5f;
+                        float y = tableBounds[table].Bottom + colOffset + sumPaint.TextSize * 0.35f;
+                        DrawText(c, text, x, y, sumPaint, sumShadow);
+                    }
+
+                    int total = tableTotals[table];
+                    string totalText = total.ToString();
+                    float totalX = tableBounds[table].Right + rowOffset;
+                    float totalY = tableBounds[table].Bottom + colOffset + totalPaint.TextSize * 0.35f;
+                    DrawText(c, totalText, totalX, totalY, totalPaint, totalShadow);
+                }
             }
         }
         return visWarp;
