@@ -1189,8 +1189,8 @@ public static class SheetScoreEngine
                 // popisky: index, % fill, slot 0..5
                 string idxLabel = $"#{i}";
                 string fillLabel = $"{Math.Round(pList[i] * 100)}%";
-                // ukazovat jen kdyz {Math.Round(pList[i] * 100)} je vic nez 50%?
-                bool showFill = Math.Round(pList[i] * 100) > 40;
+                // ukazovat jen kdyz {Math.Round(pList[i] * 100)} je vic nez 30%?
+                bool showFill = Math.Round(pList[i] * 100) > 30;
 
 
                 string slotLabel = slotByIndex[i] >= 0 ? slotByIndex[i].ToString() : "?";

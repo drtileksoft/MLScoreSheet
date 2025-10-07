@@ -12,6 +12,7 @@ public partial class MainPage : ContentPage
 {
     private readonly IGallerySaver _gallerySaver;
     private string? _lastImagePath;
+    private const float CrossedThreshold = 0.40f;
 
     public MainPage()
     {
@@ -139,7 +140,7 @@ public partial class MainPage : ContentPage
                     using var photoWithOverlay = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
                         photoWithOverlay,
-                        fixedThreshold: 0.50f,
+                        fixedThreshold: CrossedThreshold,
                         autoThreshold: false);
                 });
 
@@ -163,7 +164,7 @@ public partial class MainPage : ContentPage
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
                         photo,
-                        fixedThreshold: 0.50f,
+                        fixedThreshold: CrossedThreshold,
                         autoThreshold: false);
                 });
 
