@@ -1,6 +1,7 @@
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using SkiaSharp;
+using System.Threading.Tasks;
 using YourApp.Services;
 
 namespace MLScoreSheetCounter;
@@ -103,11 +104,14 @@ public partial class MainPage : ContentPage
 
             if (showOverlay)
             {
-                using var photoWithOverlay = File.OpenRead(photoPath);
-                using var res = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
-                    photoWithOverlay,
-                    fixedThreshold: 0.72f,
-                    autoThreshold: false);
+                using var res = await Task.Run(async () =>
+                {
+                    using var photoWithOverlay = File.OpenRead(photoPath);
+                    return await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
+                        photoWithOverlay,
+                        fixedThreshold: 0.72f,
+                        autoThreshold: false);
+                });
 
                 ResultLabel.Text = $"TOTAL = {res.Total}";
 
@@ -123,11 +127,14 @@ public partial class MainPage : ContentPage
             }
             else
             {
-                using var photo = File.OpenRead(photoPath);
-                var total = await SheetScoreEngine.ComputeTotalScoreAsync(
-                    photo,
-                    fixedThreshold: 0.74f,
-                    autoThreshold: false);
+                var total = await Task.Run(async () =>
+                {
+                    using var photo = File.OpenRead(photoPath);
+                    return await SheetScoreEngine.ComputeTotalScoreAsync(
+                        photo,
+                        fixedThreshold: 0.74f,
+                        autoThreshold: false);
+                });
 
                 ResultLabel.Text = $"TOTAL = {total}";
                 Preview.Source = ImageSource.FromFile(photoPath);
