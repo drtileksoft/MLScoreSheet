@@ -19,14 +19,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>XSAppIconAssets</key>
-	<string>Assets.xcassets/appicon.appiconset</string>
+        <key>UISupportedInterfaceOrientations~ipad</key>
+        <array>
+                <string>UIInterfaceOrientationPortrait</string>
+                <string>UIInterfaceOrientationPortraitUpsideDown</string>
+                <string>UIInterfaceOrientationLandscapeLeft</string>
+                <string>UIInterfaceOrientationLandscapeRight</string>
+        </array>
+        <key>XSAppIconAssets</key>
+        <string>Assets.xcassets/appicon.appiconset</string>
+        <key>NSPhotoLibraryUsageDescription</key>
+        <string>Aplikace potřebuje přístup k fotkám kvůli uložení výsledného obrázku.</string>
+        <key>NSPhotoLibraryAddUsageDescription</key>
+        <string>Aplikace potřebuje oprávnění pro přidání obrázků do galerie.</string>
 </dict>
 </plist>
