@@ -6,8 +6,6 @@ namespace MLScoreSheetCounter;
 
 public partial class MainPage : ContentPage
 {
-    private readonly PictureCleaner _pictureCleaner = new();
-
     public MainPage()
     {
         InitializeComponent();
@@ -86,21 +84,11 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            string cleanedPhotoPath;
-            try
-            {
-                cleanedPhotoPath = _pictureCleaner.Clean(photoPath);
-            }
-            catch (Exception cleanEx)
-            {
-                cleanedPhotoPath = photoPath;
-                await DisplayAlert("Info", $"Nepodařilo se vyčistit fotku: {cleanEx.Message}. Použije se původní verze.", "OK");
-            }
             var showOverlay = OverlayCheckBox?.IsChecked ?? false;
 
             if (showOverlay)
             {
-                using var photoWithOverlay = File.OpenRead(cleanedPhotoPath);
+                using var photoWithOverlay = File.OpenRead(photoPath);
                 using var res = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
                     photoWithOverlay,
                     fixedThreshold: 0.72f,
@@ -120,14 +108,14 @@ public partial class MainPage : ContentPage
             }
             else
             {
-                using var photo = File.OpenRead(cleanedPhotoPath);
+                using var photo = File.OpenRead(photoPath);
                 var total = await SheetScoreEngine.ComputeTotalScoreAsync(
                     photo,
                     fixedThreshold: 0.74f,
                     autoThreshold: false);
 
                 ResultLabel.Text = $"TOTAL = {total}";
-                Preview.Source = ImageSource.FromFile(cleanedPhotoPath);
+                Preview.Source = ImageSource.FromFile(photoPath);
             }
         }
         catch (Exception ex)
