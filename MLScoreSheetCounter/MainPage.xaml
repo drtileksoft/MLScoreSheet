@@ -35,7 +35,7 @@
                     HorizontalOptions="FillAndExpand"
                     ValueChanged="OnCalculationThresholdChanged" />
             <Label x:Name="CalculationThresholdValueLabel"
-                   Text="0.30"
+                   Text="0.35"
                    WidthRequest="50"
                    HorizontalTextAlignment="End"
                    VerticalTextAlignment="Center" />
