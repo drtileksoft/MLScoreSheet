@@ -77,15 +77,9 @@ public partial class MainPage : ContentPage
         try
         {
             using var photo = File.OpenRead(photoPath);
-            // pevný práh
-            // return await SheetScoreEngine.ComputeTotalScoreAsync(photo, fixedThreshold: 0.35f, autoThreshold: false);
 
-            // auto-threshold (k-means)
-            // var result = await SheetScoreEngine.ComputeTotalScoreAsync(photo, fixedThreshold: 0.74f, autoThreshold: true);
-
-
-            //var res = await SheetScoreEngine.ComputeTotalScoreAsync(photo, fixedThreshold: 0.74f, autoThreshold: false);
-            //ResultLabel.Text = $"TOTAL = {res}";
+            var resFast = await SheetScoreEngine.ComputeTotalScoreAsync(photo, fixedThreshold: 0.74f, autoThreshold: false);
+            ResultLabel.Text = $"TOTAL = {resFast}";
 
 
             // 2) Debug overlay:
@@ -103,8 +97,6 @@ public partial class MainPage : ContentPage
             {
                 await DisplayAlert("Chyba", ex.Message, "OK");
             }
-
-            //Preview.Source = ImageSource.FromStream(res.Overlay);
 
             ResultLabel.Text = $"TOTAL = {res.Total}";
         }
