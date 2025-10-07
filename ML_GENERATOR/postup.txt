@@ -1,0 +1,53 @@
+python -m pip install --upgrade pip
+py -m pip install --upgrade pip
+py -m pip install opencv-python numpy
+
+py 01_generate_data.py --n 1200 --cls --debug
+
+# overeni pozic fiducialu
+py 02_viz_yolo_labels.py
+
+pip install ultralytics==8.3.0 torch torchvision torchaudio opencv-python numpy matplotlib tqdm
+
+py 03_prepare_split.py
+
+py 04_train_yolo.py
+
+py 05_verify_yolo_on_image.py --weights runs/detect/train/weights/best.pt --image datasets/yolo/images/val/img_00012.jpg --out out_yolo_verify
+py 05_verify_yolo_on_image.py --weights runs/detect/train/weights/best.pt --image photo.jpeg --out out_yolo_verify
+
+py 06_train_cls.py
+
+py 07_test_full.py --image photo.jpeg --boxes OcrScoreSheetBoxes.png --fid OcrScoreSheetFiducials.png --yolo runs/detect/train/weights/best.pt --cls cls_best.pth --out out_full --debug --cls-thr 0.05
+
+py 07_test_full2.py --image photo.jpeg --boxes OcrScoreSheetBoxes.png --fid OcrScoreSheetFiducials.png --yolo runs/detect/train/w
+eights/best.pt --out out_full --debug
+
+$ py 08_export_yolo_onnx.py 
+✔ ONNX uložen: runs\detect\train\weights\best.onnx
+
+$ py 09_export_cls_onnx.py
+✔ ONNX uložen: cls_best.onnx
+
+
+py 12_eval_cls_onnx.py --onnx cls_best.onnx --cls_dir dataset/cls --input images
+
+$ py 14_countall.py --image photo.jpeg --boxes OcrScoreSheetBoxes.png --fid OcrScoreSheetFiducials.png --yolo runs/detect/train/weights/best.pt --out out_full --debug
+[fixed-thr] 0.350
+✔ Skóre hotovo (jen ZELENÉ, robustní 3×2). Skupin: 60, CELKEM: 43
+  Výstupy v: out_full
+
+py 15_countfast.py --image photo.jpeg --boxes OcrScoreSheetBoxes.png --fid OcrScoreSheetFiducials.png --yolo runs/detect/train/weights/best.pt
+
+py 15_countfast.py --image photo.jpeg --boxes OcrScoreSheetBoxes.png --fid OcrScoreSheetFiducials.png --yolo runs/detect/train/weights/best.pt --auto-thr
+
+
+# (doporučeno) virtuální prostředí
+py -3.11 -m venv .venv
+. .\.venv\Scripts\Activate.ps1
+# odinstaluj konflikt
+pip uninstall -y opencv-python numpy
+# nainstaluj kompatibilní kombinaci pro TF 2.15
+pip install --no-cache-dir numpy==1.26.4 opencv-python==4.8.1.78
+pip install "tensorflow==2.15.*" ultralytics tf2onnx onnx "onnxruntime==1.18.*" pillow tqdm matplotlib
+
