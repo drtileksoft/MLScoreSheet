@@ -1,16 +1,21 @@
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using SkiaSharp;
+using System.Threading;
 using System.Threading.Tasks;
-using YourApp.Services;
+using MLScoreSheetCounter.Services;
 
 namespace MLScoreSheetCounter;
 
 public partial class MainPage : ContentPage
 {
+    private readonly IGallerySaver _gallerySaver;
+    private string? _lastImagePath;
+
     public MainPage()
     {
         InitializeComponent();
+        _gallerySaver = ServiceHelper.GetRequiredService<IGallerySaver>();
     }
 
     private void SetProcessingState(bool isProcessing)
@@ -23,6 +28,23 @@ public partial class MainPage : ContentPage
             PickPhotoButton.IsEnabled = !isProcessing;
             TakePhotoButton.IsEnabled = !isProcessing;
             OverlayCheckBox.IsEnabled = !isProcessing;
+            SaveToGalleryButton.IsEnabled = !isProcessing && !string.IsNullOrEmpty(_lastImagePath);
+        });
+    }
+
+    private void ResetPreview()
+    {
+        PreviewContainer.Reset();
+        Preview.Source = null;
+        _lastImagePath = null;
+        UpdateSaveButtonState();
+    }
+
+    private void UpdateSaveButtonState()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            SaveToGalleryButton.IsEnabled = !string.IsNullOrEmpty(_lastImagePath) && !(ProcessingIndicator?.IsRunning ?? false);
         });
     }
 
@@ -100,6 +122,7 @@ public partial class MainPage : ContentPage
         SetProcessingState(true);
         try
         {
+            ResetPreview();
             var showOverlay = OverlayCheckBox?.IsChecked ?? false;
 
             if (showOverlay)
@@ -123,6 +146,7 @@ public partial class MainPage : ContentPage
                     data.SaveTo(fs);
                 }
 
+                _lastImagePath = overlayPath;
                 Preview.Source = ImageSource.FromFile(overlayPath);
             }
             else
@@ -137,8 +161,10 @@ public partial class MainPage : ContentPage
                 });
 
                 ResultLabel.Text = $"TOTAL = {total}";
+                _lastImagePath = photoPath;
                 Preview.Source = ImageSource.FromFile(photoPath);
             }
+            UpdateSaveButtonState();
         }
         catch (Exception ex)
         {
@@ -148,5 +174,49 @@ public partial class MainPage : ContentPage
         {
             SetProcessingState(false);
         }
+    }
+
+    private async void OnSaveToGalleryClicked(object sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(_lastImagePath))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!await EnsureSavePermissionAsync())
+            {
+                await DisplayAlert("Chyba", "Bez oprávnění nelze uložit do galerie.", "OK");
+                return;
+            }
+
+            var fileName = Path.GetFileName(_lastImagePath);
+            await _gallerySaver.SaveImageAsync(_lastImagePath, fileName, CancellationToken.None);
+            await DisplayAlert("Hotovo", "Obrázek byl uložen do galerie.", "OK");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Chyba", ex.Message, "OK");
+        }
+    }
+
+    private static async Task<bool> EnsureSavePermissionAsync()
+    {
+#if ANDROID
+        if (DeviceInfo.Current.Version.Major >= 13)
+        {
+            var status = await Permissions.RequestAsync<Permissions.Photos>();
+            return status is PermissionStatus.Granted or PermissionStatus.Limited;
+        }
+
+        var writeStatus = await Permissions.RequestAsync<Permissions.StorageWrite>();
+        return writeStatus == PermissionStatus.Granted;
+#elif IOS
+        var status = await Permissions.RequestAsync<Permissions.Photos>();
+        return status is PermissionStatus.Granted or PermissionStatus.Limited;
+#else
+        return true;
+#endif
     }
 }
