@@ -89,26 +89,27 @@ public static class SheetScoreEngine
 
         var res = ScoreSelector3x2.SumWinnerTakesAll(tpl.Rects, pList, thr);
 
-        // vytvoř overlaye – jeden v šabloně (warped), druhý v originálu (projektované ROI)
+        // groups pro orámování a sloty 0..5
+        var groups = BuildGroupsGrid3x2(tpl.Rects, pList); // interní helper v tomto souboru :contentReference[oaicite:2]{index=2}
+
+        // overlaye (warped + originál) s novou logikou barvení + popisky
         var (overlayWarped, overlayOriginal) = MakeOverlays(
-            warped,          // tohle je přesně bitmap, ze kterého se počítá % černé
-            photo,           // původní fotka (bez resize/letterbox)
-            H,               // homog. matice src->dst
-            tpl.Rects, pList, thr);
+            warped,
+            photo,
+            H,
+            tpl.Rects,
+            pList,
+            thr,
+            res.WinnerIndices,   // <<<< přidáno
+            groups               // <<<< přidáno
+        );
 
-        // případně si je ulož pro vizuální kontrolu:
-#if DEBUG
-        //var warpPath = SavePng(overlayWarped, "overlay_warpedX");
-        //var origPath = SavePng(overlayOriginal, "overlay_originalX");
-#endif
-
-        // ...a vrať overlay, který chceš (doporučuju ten "warped")
-        int total = TotalScoreFromItems(tpl.Rects, pList, thr);
+        // ... návratová hodnota:
         return new ScoreOverlayResult
         {
-            Total = total,
+            Total = res.Total,           // <<<< beru číslo z SumWinnerTakesAll
             ThresholdUsed = thr,
-            Overlay = overlayWarped   // ← případně si přidej ještě property na druhý obrázek
+            Overlay = overlayWarped
         };
 
     }
@@ -841,42 +842,85 @@ public static class SheetScoreEngine
     }
 
     static (SKBitmap warpedOverlay, SKBitmap originalOverlay) MakeOverlays(
-    SKBitmap warped, SKBitmap original, float[] H,              // H: src->dst
-    System.Collections.Generic.List<SKRectI> rects, float[] pList, float thr)
+    SKBitmap warped, SKBitmap original, float[] H,
+    List<SKRectI> rects, float[] pList, float thr,
+    IList<int> winnerIndices,                 // <<<< přidáno
+    List<Group> groups                        // <<<< přidáno
+)
     {
         var m = ToSkMatrix(H);
         if (!Invert(m, out var Hinv)) Hinv = SKMatrix.CreateIdentity();
 
-        // -------- 2a) Overlay NA WARPED obrázku (stejné plátno jako výpočet) --------
+        // Připrav mapu slotu 0..5 pro každý index (kvůli číslici v boxu)
+        var slotByIndex = Enumerable.Repeat(-1, rects.Count).ToArray();
+        for (int gi = 0; gi < groups.Count; gi++)
+            for (int s = 0; s < 6; s++)
+                slotByIndex[groups[gi].Indices[s]] = s;
+
+        var winners = new HashSet<int>(winnerIndices);
+
+        // ---------- Overlay na WARPED ----------
         var visWarp = warped.Copy();
         using (var c = new SKCanvas(visWarp))
         {
             var green = new SKPaint { Color = new SKColor(40, 200, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 2f, IsAntialias = true };
             var red = new SKPaint { Color = new SKColor(230, 40, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 2f, IsAntialias = true };
+            var blue = new SKPaint { Color = new SKColor(70, 130, 240), Style = SKPaintStyle.Stroke, StrokeWidth = 2.5f, PathEffect = SKPathEffect.CreateDash(new float[] { 6, 6 }, 0), IsAntialias = true };
+
+            // texty
+            var txt = new SKPaint { Color = SKColors.White, TextSize = 16, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) };
+            var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 180), TextSize = 16, IsAntialias = true, Typeface = txt.Typeface };
+
+            // 2.1 rámečky šestic
+            foreach (var g in groups)
+            {
+                // union 6ti rectů
+                var rs = g.Indices.Select(i => rects[i]).ToArray();
+                int minX = rs.Min(r => r.Left), minY = rs.Min(r => r.Top);
+                int maxX = rs.Max(r => r.Right), maxY = rs.Max(r => r.Bottom);
+                var pad = 3;
+                var R = new SKRect(minX - pad, minY - pad, maxX + pad, maxY + pad);
+                c.DrawRect(R, blue);
+            }
+
+            // 2.2 boxy + popisky
             for (int i = 0; i < rects.Count; i++)
             {
                 var r = rects[i];
-                bool ok = pList[i] >= thr;
-                c.DrawRect(new SKRect(r.Left, r.Top, r.Right, r.Bottom), ok ? green : red);
+                bool isWin = winners.Contains(i);
+                c.DrawRect(new SKRect(r.Left, r.Top, r.Right, r.Bottom), isWin ? green : red);
+
+                // popisky: index, % fill, slot 0..5
+                string idxLabel = $"#{i}";
+                string fillLabel = $"{Math.Round(pList[i] * 100)}%";
+                string slotLabel = slotByIndex[i] >= 0 ? slotByIndex[i].ToString() : "?";
+
+                // umístění: index vlevo nahoře, % vpravo dole, slot doprostřed
+                DrawText(c, idxLabel, r.Left + 2, r.Top + 14, txt, shadow);
+                DrawText(c, fillLabel, r.Right - 2 - txt.MeasureText(fillLabel), r.Bottom - 4, txt, shadow);
+                // slot center
+                float cx = r.Left + r.Width * 0.5f;
+                float cy = r.Top + r.Height * 0.55f;
+                var slotPaint = new SKPaint { Color = isWin ? green.Color : red.Color, TextSize = 20, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Normal) };
+                var slotShadow = new SKPaint { Color = new SKColor(0, 0, 0, 200), TextSize = 20, IsAntialias = true, Typeface = slotPaint.Typeface };
+                float sw = slotPaint.MeasureText(slotLabel);
+                DrawText(c, slotLabel, cx - sw / 2, cy, slotPaint, slotShadow);
             }
         }
 
-        // -------- 2b) Overlay NA PŮVODNÍ fotce (projekce ROI přes H^{-1}) --------
+        // ---------- Overlay na ORIGINÁLU (volitelné – barvy dle winners, bez popisků, projekce přes H^{-1}) ----------
         var visSrc = original.Copy();
         using (var c = new SKCanvas(visSrc))
         {
             var green = new SKPaint { Color = new SKColor(40, 200, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 2.5f, IsAntialias = true };
             var red = new SKPaint { Color = new SKColor(230, 40, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f, IsAntialias = true };
-
             foreach (var (r, idx) in rects.Select((R, I) => (R, I)))
             {
-                // 4 rohy v šabloně:
                 var p0 = new SKPoint(r.Left, r.Top);
                 var p1 = new SKPoint(r.Right, r.Top);
                 var p2 = new SKPoint(r.Right, r.Bottom);
                 var p3 = new SKPoint(r.Left, r.Bottom);
 
-                // Projektuj je zpět do originálu pomocí H^{-1}
                 var q0 = Project(Hinv, p0.X, p0.Y);
                 var q1 = Project(Hinv, p1.X, p1.Y);
                 var q2 = Project(Hinv, p2.X, p2.Y);
@@ -884,8 +928,7 @@ public static class SheetScoreEngine
 
                 using var path = new SKPath();
                 path.MoveTo(q0); path.LineTo(q1); path.LineTo(q2); path.LineTo(q3); path.Close();
-                bool ok = pList[idx] >= thr;
-                c.DrawPath(path, ok ? green : red);
+                c.DrawPath(path, winners.Contains(idx) ? green : red);
             }
         }
 
