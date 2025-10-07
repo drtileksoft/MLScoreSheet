@@ -12,7 +12,7 @@ public partial class MainPage : ContentPage
 {
     private readonly IGallerySaver _gallerySaver;
     private string? _lastImagePath;
-    private const float CrossedThreshold = 0.40f;
+    private const float CrossedThreshold = 0.30f;
 
     public MainPage()
     {
