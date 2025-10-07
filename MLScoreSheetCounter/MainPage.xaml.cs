@@ -1,3 +1,4 @@
+using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
 using SkiaSharp;
 using YourApp.Services;
@@ -9,6 +10,19 @@ public partial class MainPage : ContentPage
     public MainPage()
     {
         InitializeComponent();
+    }
+
+    private void SetProcessingState(bool isProcessing)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            ProcessingContainer.IsVisible = isProcessing;
+            ProcessingIndicator.IsRunning = isProcessing;
+            ProcessingLabel.IsVisible = isProcessing;
+            PickPhotoButton.IsEnabled = !isProcessing;
+            TakePhotoButton.IsEnabled = !isProcessing;
+            OverlayCheckBox.IsEnabled = !isProcessing;
+        });
     }
 
     private async void OnPickPhoto(object sender, EventArgs e)
@@ -82,6 +96,7 @@ public partial class MainPage : ContentPage
 
     private async Task RunDetection(string photoPath)
     {
+        SetProcessingState(true);
         try
         {
             var showOverlay = OverlayCheckBox?.IsChecked ?? false;
@@ -121,6 +136,10 @@ public partial class MainPage : ContentPage
         catch (Exception ex)
         {
             await DisplayAlert("Chyba", ex.Message, "OK");
+        }
+        finally
+        {
+            SetProcessingState(false);
         }
     }
 }

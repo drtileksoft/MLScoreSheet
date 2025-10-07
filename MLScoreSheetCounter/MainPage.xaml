@@ -4,8 +4,8 @@
              x:Class="MLScoreSheetCounter.MainPage">
     
     <VerticalStackLayout Padding="16" Spacing="12">
-        <Button Text="Vybrat fotku z galerie" Clicked="OnPickPhoto"/>
-        <Button Text="Vyfotit" Clicked="OnTakePhoto"/>
+        <Button x:Name="PickPhotoButton" Text="Vybrat fotku z galerie" Clicked="OnPickPhoto"/>
+        <Button x:Name="TakePhotoButton" Text="Vyfotit" Clicked="OnTakePhoto"/>
 
         <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
             <CheckBox x:Name="OverlayCheckBox" IsChecked="True"/>
@@ -13,6 +13,11 @@
         </HorizontalStackLayout>
 
         <Label x:Name="ResultLabel" Text="TOTAL = ?" FontSize="18" />
+
+        <HorizontalStackLayout x:Name="ProcessingContainer" IsVisible="False" Spacing="8" VerticalOptions="Center">
+            <ActivityIndicator x:Name="ProcessingIndicator" IsRunning="False" VerticalOptions="Center"/>
+            <Label x:Name="ProcessingLabel" Text="Probíhá zpracování..." VerticalTextAlignment="Center"/>
+        </HorizontalStackLayout>
 
         <Image x:Name="Preview" Aspect="AspectFit" HeightRequest="380" />
     </VerticalStackLayout>
