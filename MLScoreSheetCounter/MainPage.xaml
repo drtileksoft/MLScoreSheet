@@ -7,6 +7,11 @@
         <Button Text="Vybrat fotku z galerie" Clicked="OnPickPhoto"/>
         <Button Text="Vyfotit" Clicked="OnTakePhoto"/>
 
+        <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+            <CheckBox x:Name="OverlayCheckBox" IsChecked="True"/>
+            <Label Text="Zobrazit zvýraznění" VerticalTextAlignment="Center"/>
+        </HorizontalStackLayout>
+
         <Label x:Name="ResultLabel" Text="TOTAL = ?" FontSize="18" />
 
         <Image x:Name="Preview" Aspect="AspectFit" HeightRequest="380" />

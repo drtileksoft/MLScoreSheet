@@ -1,5 +1,4 @@
-﻿using Microsoft.Maui.Controls;
-using MLScoreSheetCounter;
+using Microsoft.Maui.Controls;
 using SkiaSharp;
 using YourApp.Services;
 
@@ -7,6 +6,8 @@ namespace MLScoreSheetCounter;
 
 public partial class MainPage : ContentPage
 {
+    private readonly PictureCleaner _pictureCleaner = new();
+
     public MainPage()
     {
         InitializeComponent();
@@ -21,13 +22,17 @@ public partial class MainPage : ContentPage
                 PickerTitle = "Vyber fotku score sheetu",
                 FileTypes = FilePickerFileType.Images
             });
-            if (file == null) return;
+            if (file == null)
+            {
+                return;
+            }
 
-            // zkopíruj do cache (kvůli jednoduššímu přístupu)
             var copyPath = Path.Combine(FileSystem.Current.CacheDirectory, Path.GetFileName(file.FullPath));
             using (var src = File.OpenRead(file.FullPath))
             using (var dst = File.Create(copyPath))
+            {
                 await src.CopyToAsync(dst);
+            }
 
             await RunDetection(copyPath);
         }
@@ -46,12 +51,17 @@ public partial class MainPage : ContentPage
             {
                 Title = "Vyfoť score sheet"
             });
-            if (result == null) return;
+            if (result == null)
+            {
+                return;
+            }
 
             var copyPath = Path.Combine(FileSystem.Current.CacheDirectory, $"{DateTime.Now:yyyyMMdd_HHmmss}.jpg");
             using (var src = await result.OpenReadAsync())
             using (var dst = File.Create(copyPath))
+            {
                 await src.CopyToAsync(dst);
+            }
 
             await RunDetection(copyPath);
         }
@@ -76,29 +86,49 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            using var photo = File.OpenRead(photoPath);
-
-            var resFast = await SheetScoreEngine.ComputeTotalScoreAsync(photo, fixedThreshold: 0.74f, autoThreshold: false);
-            ResultLabel.Text = $"TOTAL = {resFast}";
-
-
-            // 2) Debug overlay:
-            using var res = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(photo, fixedThreshold: 0.72f, autoThreshold: false);
-
+            string cleanedPhotoPath;
             try
             {
-                var path = Path.Combine(FileSystem.CacheDirectory, $"overlay_warped_{Guid.NewGuid().ToString("N")}.png");
+                cleanedPhotoPath = _pictureCleaner.Clean(photoPath);
+            }
+            catch (Exception cleanEx)
+            {
+                cleanedPhotoPath = photoPath;
+                await DisplayAlert("Info", $"Nepodařilo se vyčistit fotku: {cleanEx.Message}. Použije se původní verze.", "OK");
+            }
+            var showOverlay = OverlayCheckBox?.IsChecked ?? false;
+
+            if (showOverlay)
+            {
+                using var photoWithOverlay = File.OpenRead(cleanedPhotoPath);
+                using var res = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
+                    photoWithOverlay,
+                    fixedThreshold: 0.72f,
+                    autoThreshold: false);
+
+                ResultLabel.Text = $"TOTAL = {res.Total}";
+
+                var overlayPath = Path.Combine(FileSystem.Current.CacheDirectory, $"overlay_warped_{Guid.NewGuid():N}.png");
                 using (var img = SKImage.FromBitmap(res.Overlay))
                 using (var data = img.Encode(SKEncodedImageFormat.Png, 95))
-                using (var fs = File.Create(path)) data.SaveTo(fs);
-                Preview.Source = ImageSource.FromFile(path);
-            }
-            catch( Exception ex)
-            {
-                await DisplayAlert("Chyba", ex.Message, "OK");
-            }
+                using (var fs = File.Create(overlayPath))
+                {
+                    data.SaveTo(fs);
+                }
 
-            ResultLabel.Text = $"TOTAL = {res.Total}";
+                Preview.Source = ImageSource.FromFile(overlayPath);
+            }
+            else
+            {
+                using var photo = File.OpenRead(cleanedPhotoPath);
+                var total = await SheetScoreEngine.ComputeTotalScoreAsync(
+                    photo,
+                    fixedThreshold: 0.74f,
+                    autoThreshold: false);
+
+                ResultLabel.Text = $"TOTAL = {total}";
+                Preview.Source = ImageSource.FromFile(cleanedPhotoPath);
+            }
         }
         catch (Exception ex)
         {
