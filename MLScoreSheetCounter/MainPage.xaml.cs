@@ -109,7 +109,7 @@ public partial class MainPage : ContentPage
                     using var photoWithOverlay = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
                         photoWithOverlay,
-                        fixedThreshold: 0.72f,
+                        fixedThreshold: 0.60f,
                         autoThreshold: false);
                 });
 
@@ -132,7 +132,7 @@ public partial class MainPage : ContentPage
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
                         photo,
-                        fixedThreshold: 0.74f,
+                        fixedThreshold: 0.60f,
                         autoThreshold: false);
                 });
 
