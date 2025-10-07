@@ -4,7 +4,7 @@
 		<TargetFrameworks>net9.0-android;net9.0-ios</TargetFrameworks>
 		
 		<OutputType>Exe</OutputType>
-		<RootNamespace>MLScoreSheetCounter</RootNamespace>
+		<RootNamespace>cz.drtileksoft.MLScore</RootNamespace>
 		<UseMaui>true</UseMaui>
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -14,7 +14,7 @@
 		<ApplicationTitle>MLScoreSheetCounter</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.mlscoresheetcounter</ApplicationId>
+		<ApplicationId>cz.drtileksoft.MLScoreSheetCounter</ApplicationId>
 
 		<!-- Versions -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -26,6 +26,16 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<AssemblyName>cz.drtileksoft.MLScoreSheetCounter</AssemblyName>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(TargetFramework)'=='net9.0-ios'">
+	  <ProvisioningType>manual</ProvisioningType>
+	  <CodesignKey>Apple Distribution: hkfree.org z.s. (UDJNAX3R73)</CodesignKey>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net9.0-ios|AnyCPU'">
+	  <MtouchLink>SdkOnly</MtouchLink>
 	</PropertyGroup>
 
 	<ItemGroup>

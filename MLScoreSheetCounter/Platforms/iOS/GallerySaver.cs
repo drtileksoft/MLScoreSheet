@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Foundation;
+using MLScoreSheetCounter.Platforms.iOS;
 using MLScoreSheetCounter.Services;
 using Photos;
 
@@ -11,7 +12,7 @@ public partial class GallerySaver : IGallerySaver
 {
     public async Task SaveImageAsync(string filePath, string fileName, CancellationToken cancellationToken = default)
     {
-        var status = PHPhotoLibrary.AuthorizationStatusForAccessLevel(PHAccessLevel.AddOnly);
+        var status = PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.AddOnly);
         if (status == PHAuthorizationStatus.NotDetermined)
         {
             status = await PHPhotoLibrary.RequestAuthorizationAsync(PHAccessLevel.AddOnly);
@@ -28,10 +29,8 @@ public partial class GallerySaver : IGallerySaver
             throw new InvalidOperationException("Nelze otevřít soubor pro uložení.");
         }
 
-        await PHPhotoLibrary.SharedPhotoLibrary.PerformChangesAsync(() =>
-        {
-            var request = PHAssetCreationRequest.CreationRequestForAsset();
-            request.AddResource(PHAssetResourceType.Photo, url, new PHAssetResourceCreationOptions());
-        });
+
+        await PhotoSaver.SavePhotoFileAsync(url);
+
     }
 }
