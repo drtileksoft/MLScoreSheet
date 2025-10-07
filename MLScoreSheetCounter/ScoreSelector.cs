@@ -115,39 +115,6 @@ namespace MLScoreSheetCounter
             return new Result { Total = total, ThresholdUsed = thr, WinnerIndices = winners };
         }
 
-        public static float AutoThresholdKMeans(IList<float> values,
-            float tmin = 0.25f, float tmax = 0.65f, float fallback = 0.35f,
-            float minGap = 0.12f, int iters = 20)
-        {
-            if (values == null || values.Count == 0) return fallback;
-            var v = values.Select(x => Math.Clamp(x, 0f, 1f)).ToArray();
-
-            // ořez 1%..99% kvůli outlierům
-            Array.Sort(v);
-            int loi = (int)Math.Round(0.01 * (v.Length - 1));
-            int hii = (int)Math.Round(0.99 * (v.Length - 1));
-            var vv = v[loi..(hii + 1)];
-            if (vv.Length < 4) vv = v;
-
-            float c0 = Percentile(vv, 20), c1 = Percentile(vv, 80);
-            for (int i = 0; i < iters; i++)
-            {
-                float mid = 0.5f * (c0 + c1);
-                var left = vv.Where(x => x < mid).ToArray();
-                var right = vv.Where(x => x >= mid).ToArray();
-                if (left.Length == 0 || right.Length == 0) break;
-                float c0n = left.Average();
-                float c1n = right.Average();
-                if (MathF.Abs(c0n - c0) < 1e-4 && MathF.Abs(c1n - c1) < 1e-4) { c0 = c0n; c1 = c1n; break; }
-                c0 = c0n; c1 = c1n;
-            }
-            if (c0 > c1) (c0, c1) = (c1, c0);
-
-            float thr = 0.5f * (c0 + c1);
-            if ((c1 - c0) < minGap) thr = fallback;
-            return Math.Clamp(thr, tmin, tmax);
-        }
-
         // --------------- helpers ---------------
         private static List<float[]> SortByX(List<float[]> row)
         {
@@ -162,17 +129,6 @@ namespace MLScoreSheetCounter
             if (arr.Length == 0) return 0f;
             int m = arr.Length / 2;
             return (arr.Length % 2 == 1) ? arr[m] : 0.5f * (arr[m - 1] + arr[m]);
-        }
-
-        private static float Percentile(float[] v, float p)
-        {
-            if (v.Length == 0) return 0f;
-            Array.Sort(v);
-            double idx = (p / 100.0) * (v.Length - 1);
-            int i0 = (int)Math.Floor(idx);
-            int i1 = Math.Min(v.Length - 1, i0 + 1);
-            double frac = idx - i0;
-            return (float)(v[i0] * (1.0 - frac) + v[i1] * frac);
         }
     }
 }
