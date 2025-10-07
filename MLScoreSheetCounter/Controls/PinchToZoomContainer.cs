@@ -5,6 +5,7 @@ namespace MLScoreSheetCounter.Controls;
 
 public class PinchToZoomContainer : ContentView
 {
+    private const double MaxZoomScale = 20;
     private double _currentScale = 1;
     private double _startScale = 1;
     private double _xOffset;
@@ -57,7 +58,7 @@ public class PinchToZoomContainer : ContentView
                 Content.AnchorY = 0;
                 break;
             case GestureStatus.Running:
-                var targetScale = Math.Clamp(_startScale * e.Scale, 1, 6);
+                var targetScale = Math.Clamp(_startScale * e.Scale, 1, MaxZoomScale);
 
                 var renderedX = Content.X + _xOffset;
                 var deltaX = renderedX / Width;
