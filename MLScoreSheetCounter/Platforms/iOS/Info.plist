@@ -13,6 +13,12 @@
 	<array>
 		<string>arm64</string>
 	</array>
+  <key>NSCameraUsageDescription</key>
+  <string>Aplikace potřebuje přístup ke kameře pro focení výsledkových listů.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Aplikace potřebuje číst fotky pro jejich výběr a zobrazení.</string>
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>Aplikace potřebuje ukládat snímky do vaší knihovny fotek.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

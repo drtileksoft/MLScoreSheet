@@ -4,6 +4,7 @@ using SkiaSharp;
 using System.Threading;
 using System.Threading.Tasks;
 using MLScoreSheetCounter.Services;
+using YourApp.Services;
 
 namespace MLScoreSheetCounter;
 
@@ -52,10 +53,10 @@ public partial class MainPage : ContentPage
     {
         try
         {
-            var file = await FilePicker.PickAsync(new PickOptions
+            
+            var file = await MediaPicker.PickPhotoAsync(new MediaPickerOptions
             {
-                PickerTitle = "Vyber fotku score sheetu",
-                FileTypes = FilePickerFileType.Images
+                Title = "Vyber fotku score sheetu"
             });
             if (file == null)
             {
@@ -79,9 +80,15 @@ public partial class MainPage : ContentPage
 
     private async void OnTakePhoto(object sender, EventArgs e)
     {
+#if IOS
+            // před focením získej povolení ke kameře
+            await MLScoreSheetCounter.Platforms.iOS.IosPermissions.EnsureCameraAsync();
+#endif
 #if ANDROID || IOS
         try
         {
+            
+
             var result = await MediaPicker.CapturePhotoAsync(new MediaPickerOptions
             {
                 Title = "Vyfoť score sheet"
@@ -132,7 +139,7 @@ public partial class MainPage : ContentPage
                     using var photoWithOverlay = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
                         photoWithOverlay,
-                        fixedThreshold: 0.60f,
+                        fixedThreshold: 0.50f,
                         autoThreshold: false);
                 });
 
@@ -156,7 +163,7 @@ public partial class MainPage : ContentPage
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
                         photo,
-                        fixedThreshold: 0.60f,
+                        fixedThreshold: 0.50f,
                         autoThreshold: false);
                 });
 

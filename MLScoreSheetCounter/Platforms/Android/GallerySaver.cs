@@ -18,7 +18,7 @@ public partial class GallerySaver : IGallerySaver
 
     public async Task SaveImageAsync(string filePath, string fileName, CancellationToken cancellationToken = default)
     {
-        var context = Application.Context;
+        var context = Platform.CurrentActivity ?? Platform.AppContext;
         var mimeType = GetMimeType(fileName);
 
         if (Build.VERSION.SdkInt >= BuildVersionCodes.Q)

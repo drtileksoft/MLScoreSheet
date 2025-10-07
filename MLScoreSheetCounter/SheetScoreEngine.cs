@@ -33,7 +33,8 @@ public static class SheetScoreEngine
         float padFrac = 0.08f,
         float openFrac = 0.03f)
     {
-        using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        using var photo = DecodeLandscapePhoto(photoStream);
         var tpl = await LoadRectsJsonAsync(rectsJsonLogical);
 
         // --- Zdrojové fidy z fotky přes ONNX YOLO ---
@@ -71,7 +72,8 @@ public static class SheetScoreEngine
         float padFrac = 0.08f,
         float openFrac = 0.03f)
     {
-        using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        using var photo = DecodeLandscapePhoto(photoStream);
         var tpl = await LoadRectsJsonAsync(rectsJsonLogical);
 
         var src = DetectSrcFidsWithOnnx(photo, yoloOnnxLogical);
@@ -81,11 +83,6 @@ public static class SheetScoreEngine
         var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH); // vracíme v overlay
 
         var pList = new float[tpl.Rects.Count];
-        //for (int i = 0; i < tpl.Rects.Count; i++)
-        //    pList[i] = FillRatioFromRoi(warped, tpl.Rects[i], padFrac, openFrac);
-
-        //for (int i = 0; i < tpl.Rects.Count; i++)
-        //    pList[i] = (float)(GetFillPercent(warped /*ne overlay!*/, tpl.Rects[i]) / 100.0);
 
         for (int i = 0; i < tpl.Rects.Count; i++)
             pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i]) / 100.0);
@@ -246,6 +243,25 @@ public static class SheetScoreEngine
             }
             return thr;
         }
+    }
+
+    static SKBitmap DecodeLandscapePhoto(Stream photoStream)
+    {
+        var decoded = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+
+        if (decoded.Width >= decoded.Height)
+            return decoded;
+
+        var rotated = new SKBitmap(decoded.Height, decoded.Width, decoded.ColorType, decoded.AlphaType);
+        using (var canvas = new SKCanvas(rotated))
+        {
+            canvas.Translate(0, rotated.Height);
+            canvas.RotateDegrees(-90);
+            canvas.DrawBitmap(decoded, 0, 0);
+        }
+
+        decoded.Dispose();
+        return rotated;
     }
 
 
@@ -1174,7 +1190,7 @@ public static class SheetScoreEngine
                 string idxLabel = $"#{i}";
                 string fillLabel = $"{Math.Round(pList[i] * 100)}%";
                 // ukazovat jen kdyz {Math.Round(pList[i] * 100)} je vic nez 50%?
-                bool showFill = Math.Round(pList[i] * 100) > 50;
+                bool showFill = Math.Round(pList[i] * 100) > 40;
 
 
                 string slotLabel = slotByIndex[i] >= 0 ? slotByIndex[i].ToString() : "?";
