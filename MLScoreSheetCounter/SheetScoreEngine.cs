@@ -99,15 +99,12 @@ public static class SheetScoreEngine
         var groups = BuildGroupsGrid3x2(tpl.Rects, pList); // interní helper v tomto souboru :contentReference[oaicite:2]{index=2}
 
         // overlaye (warped + originál) s novou logikou barvení + popisky
-        var (overlayWarped, overlayOriginal) = MakeOverlays(
+        var overlayWarped = MakeWarpedOverlay(
             warped,
-            photo,
-            H,
             tpl.Rects,
             pList,
-            thr,
-            res.WinnerIndices,   // <<<< přidáno
-            groups               // <<<< přidáno
+            res.WinnerIndices,
+            groups
         );
 
         // ... návratová hodnota:
@@ -1028,45 +1025,13 @@ public static class SheetScoreEngine
         return groups;
     }
 
-    // Převod 3x3 float[] ↔ SKMatrix
-    static SKMatrix ToSkMatrix(float[] H)
+    static SKBitmap MakeWarpedOverlay(
+        SKBitmap warped,
+        List<SKRectI> rects,
+        float[] pList,
+        IList<int> winnerIndices,
+        List<Group> groups)
     {
-        return new SKMatrix
-        {
-            ScaleX = H[0],
-            SkewX = H[1],
-            TransX = H[2],
-            SkewY = H[3],
-            ScaleY = H[4],
-            TransY = H[5],
-            Persp0 = H[6],
-            Persp1 = H[7],
-            Persp2 = 1f
-        };
-    }
-
-    static bool Invert(SKMatrix m, out SKMatrix inv) => m.TryInvert(out inv);
-
-    // Projekce bodu homogenní maticí (x',y') = H·(x,y,1)
-    static SKPoint Project(SKMatrix H, float x, float y)
-    {
-        float X = H.ScaleX * x + H.SkewX * y + H.TransX;
-        float Y = H.SkewY * x + H.ScaleY * y + H.TransY;
-        float W = H.Persp0 * x + H.Persp1 * y + 1f;
-        if (Math.Abs(W) < 1e-8f) W = 1e-8f;
-        return new SKPoint(X / W, Y / W);
-    }
-
-    static (SKBitmap warpedOverlay, SKBitmap originalOverlay) MakeOverlays(
-    SKBitmap warped, SKBitmap original, float[] H,
-    List<SKRectI> rects, float[] pList, float thr,
-    IList<int> winnerIndices,                 // <<<< přidáno
-    List<Group> groups                        // <<<< přidáno
-)
-    {
-        var m = ToSkMatrix(H);
-        if (!Invert(m, out var Hinv)) Hinv = SKMatrix.CreateIdentity();
-
         // Připrav mapu slotu 0..5 pro každý index (kvůli číslici v boxu)
         var slotByIndex = Enumerable.Repeat(-1, rects.Count).ToArray();
         for (int gi = 0; gi < groups.Count; gi++)
@@ -1130,32 +1095,7 @@ public static class SheetScoreEngine
                 DrawText(c, slotLabel, cx - sw / 2, cy, slotPaint, slotShadow);
             }
         }
-
-        // ---------- Overlay na ORIGINÁLU (volitelné – barvy dle winners, bez popisků, projekce přes H^{-1}) ----------
-        var visSrc = original.Copy();
-        using (var c = new SKCanvas(visSrc))
-        {
-            var green = new SKPaint { Color = new SKColor(40, 200, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 2.5f, IsAntialias = true };
-            var red = new SKPaint { Color = new SKColor(230, 40, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 1.5f, IsAntialias = true };
-            foreach (var (r, idx) in rects.Select((R, I) => (R, I)))
-            {
-                var p0 = new SKPoint(r.Left, r.Top);
-                var p1 = new SKPoint(r.Right, r.Top);
-                var p2 = new SKPoint(r.Right, r.Bottom);
-                var p3 = new SKPoint(r.Left, r.Bottom);
-
-                var q0 = Project(Hinv, p0.X, p0.Y);
-                var q1 = Project(Hinv, p1.X, p1.Y);
-                var q2 = Project(Hinv, p2.X, p2.Y);
-                var q3 = Project(Hinv, p3.X, p3.Y);
-
-                using var path = new SKPath();
-                path.MoveTo(q0); path.LineTo(q1); path.LineTo(q2); path.LineTo(q3); path.Close();
-                c.DrawPath(path, winners.Contains(idx) ? green : red);
-            }
-        }
-
-        return (visWarp, visSrc);
+        return visWarp;
     }
 
 
