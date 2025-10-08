@@ -27,30 +27,30 @@ public static class SheetScoreEngine
         float padFrac = 0.08f,
         float openFrac = 0.03f)
     {
-        //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Cannot decode photo.");
         using var photo = DecodeLandscapePhoto(photoStream);
         var tpl = await LoadRectsJsonAsync(resourceProvider, rectsJsonLogical);
 
-        // --- Zdrojové fidy z fotky přes ONNX YOLO ---
+        // --- Source fiducials from the photo via ONNX YOLO ---
         var src = DetectSrcFidsWithOnnx(photo, resourceProvider, yoloOnnxLogical);
 
-        // --- Cílové fidy v šabloně (z PNG, pokud je; jinak rohy size) ---
+        // --- Target fiducials in the template (from PNG if available; otherwise the corners) ---
         var dst = await TryDetectDstFidsOrCornersAsync(resourceProvider, fidPngLogical, tpl.SizeW, tpl.SizeH);
 
         // --- Homografie + warp ---
         var H = ComputeHomography(src, dst);
         using var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH);
 
-        // --- % černé v ROI ---
+        // --- % of black pixels in the ROI ---
         var pList = new float[tpl.Rects.Count];
         for (int i = 0; i < tpl.Rects.Count; i++)
             pList[i] = FillRatioFromRoi(warped, tpl.Rects[i], padFrac, openFrac);
 
-        // --- práh ---
+        // --- threshold ---
         float thr = autoThreshold ? AutoThresholdKMeans(pList, autoMin, autoMax, fixedThreshold, 0.12f)
                                   : fixedThreshold;
 
-        // --- 3×2 skupiny a součet ---
+        // --- 3×2 groups and total ---
         return TotalScoreFromItems(tpl.Rects, pList, thr);
     }
 
@@ -68,7 +68,7 @@ public static class SheetScoreEngine
         float openFrac = 0.03f,
         float overlayVisibilityThreshold = 0.30f)
     {
-        //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        //using var photo = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Cannot decode photo.");
         using var photo = DecodeLandscapePhoto(photoStream);
         var tpl = await LoadRectsJsonAsync(resourceProvider, rectsJsonLogical);
 
@@ -76,7 +76,7 @@ public static class SheetScoreEngine
         var dst = await TryDetectDstFidsOrCornersAsync(resourceProvider, fidPngLogical, tpl.SizeW, tpl.SizeH);
 
         var H = ComputeHomography(src, dst);
-        var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH); // vracíme v overlay
+        var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH); // returned in overlay
 
         var fidWarped = new[]
         {
@@ -96,10 +96,10 @@ public static class SheetScoreEngine
 
         var res = ScoreSelector3x2.SumWinnerTakesAll(tpl.Rects, pList, thr);
 
-        // groups pro orámování a sloty 0..5
-        var groups = BuildGroupsGrid3x2(tpl.Rects, pList); // interní helper v tomto souboru :contentReference[oaicite:2]{index=2}
+        // groups for outlining and slots 0..5
+        var groups = BuildGroupsGrid3x2(tpl.Rects, pList); // internal helper in this file :contentReference[oaicite:2]{index=2}
 
-        // overlaye (warped + originál) s novou logikou barvení + popisky
+        // overlays (warped + original) with the new coloring logic + labels
         var overlayWarped = MakeWarpedOverlay(
             warped,
             tpl.Rects,
@@ -110,20 +110,20 @@ public static class SheetScoreEngine
             overlayVisibilityThreshold
         );
 
-        // ... návratová hodnota:
+        // ... return value:
         return new ScoreOverlayResult
         {
-            Total = res.Total,           // <<<< beru číslo z SumWinnerTakesAll
+            Total = res.Total,           // <<<< take the number from SumWinnerTakesAll
             ThresholdUsed = thr,
             Overlay = overlayWarped
         };
 
     }
 
-    // % černé s lokálním kontrastem (stínuvzdorné)
+    // % of black pixels with local contrast (shadow-resistant)
     static double GetFillPercentLocalContrast(SKBitmap src, SKRectI rect)
     {
-        // trochu rozšíříme výřez, aby histogram zachytil i okolní čáry/okraje
+        // slightly expand the crop so the histogram captures surrounding lines/edges
         const int margin = 3;
         var expanded = new SKRectI(
             Math.Max(0, rect.Left - margin),
@@ -135,7 +135,7 @@ public static class SheetScoreEngine
             return 0;
         rect = expanded;
 
-        // 0) ignoruj rámeček – zarovnej 12 % z každé strany (klidně zvedni na 0.18)
+        // 0) ignore the frame—trim 12% from each side (raise to 0.18 if needed)
         int ix = Math.Max(1, (int)Math.Round(rect.Width * 0.12));
         int iy = Math.Max(1, (int)Math.Round(rect.Height * 0.12));
         var r = new SKRectI(rect.Left + ix, rect.Top + iy, rect.Right - ix, rect.Bottom - iy);
@@ -145,7 +145,7 @@ public static class SheetScoreEngine
         using (var cc = new SKCanvas(roi)) cc.DrawBitmap(src, r, new SKRect(0, 0, r.Width, r.Height));
         using var pm = new SKPixmap(roi.Info, roi.GetPixels(out _));
 
-        // 1) histogram TEMNOSTI (dark = 255 - luminance)
+        // 1) histogram of DARKNESS (dark = 255 - luminance)
         Span<int> hist = stackalloc int[256]; hist.Clear();
         int total = roi.Width * roi.Height;
         unsafe
@@ -159,21 +159,21 @@ public static class SheetScoreEngine
                 {
                     byte B = row[x * bpp + 0], G = row[x * bpp + 1], R = row[x * bpp + 2];
                     int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int d = 255 - y8;           // temnost
+                    int d = 255 - y8;           // darkness
                     hist[d]++;
                 }
             }
         }
 
-        // 2) robustní min/max z percentilů (např. 5. a 95.)
+        // 2) robust min/max from percentiles (e.g. 5th and 95th)
         int pLo = PercentileFromHist(hist, total, 0.05);
         int pHi = PercentileFromHist(hist, total, 0.95);
         if (pHi <= pLo) { pLo = Math.Max(0, pLo - 1); pHi = Math.Min(255, pLo + 1); }
         double range = pHi - pLo;
 
-        // 3) druhý průchod: normalizace na 0..255 a histogram pro Otsu
+        // 3) second pass: normalize to 0..255 and build histogram for Otsu
         Span<int> histN = stackalloc int[256]; histN.Clear();
-        int blacks = 0; // vyplníme až po určení prahu
+        int blacks = 0; // filled after the threshold is determined
         unsafe
         {
             using var pm2 = new SKPixmap(roi.Info, roi.GetPixels(out _));
@@ -187,7 +187,7 @@ public static class SheetScoreEngine
                     byte B = row[x * bpp + 0], G = row[x * bpp + 1], R = row[x * bpp + 2];
                     int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
                     int d = 255 - y8;
-                    // kontrastní roztažení podle lokálního min/max
+                    // contrast stretching based on local min/max
                     double dn = (d - pLo) / range;
                     if (dn < 0) dn = 0; else if (dn > 1) dn = 1;
                     int q = (int)Math.Round(dn * 255.0);
@@ -196,10 +196,10 @@ public static class SheetScoreEngine
             }
         }
 
-        // 4) Otsu na normalizovaném histogramu → práh qThr (0..255)
+        // 4) Otsu on the normalized histogram -> threshold qThr (0..255)
         int qThr = OtsuThreshold(histN, total);
 
-        // 5) finální spočtení podílu "černých" (>= práh) v jedné smyčce
+        // 5) final computation of the share of "black" (>= threshold) in a single loop
         unsafe
         {
             using var pm3 = new SKPixmap(roi.Info, roi.GetPixels(out _));
@@ -226,7 +226,7 @@ public static class SheetScoreEngine
         if (pct < 0) pct = 0; else if (pct > 100) pct = 100;
         return pct;
 
-        // ---- lokální pomocné funkce ----
+        // ---- local helper functions ----
         static int PercentileFromHist(Span<int> h, int tot, double p)
         {
             int target = (int)Math.Round(p * tot);
@@ -253,7 +253,7 @@ public static class SheetScoreEngine
 
     static SKBitmap DecodeLandscapePhoto(Stream photoStream)
     {
-        var decoded = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Nelze dekódovat foto.");
+        var decoded = SKBitmap.Decode(photoStream) ?? throw new InvalidOperationException("Cannot decode photo.");
 
         if (decoded.Width >= decoded.Height)
             return decoded;
@@ -271,10 +271,10 @@ public static class SheetScoreEngine
     }
 
 
-    // --- Robustní % černé pro jeden box ---
+    // --- Robust % of black pixels for a single box ---
     static double GetFillPercent(SKBitmap src, SKRectI rect)
     {
-        // 1) Ořez okrajů (rámeček/linky) ~12 % z každé strany
+        // 1) Trim edges (frame/lines) ~12% from each side
         int insetX = Math.Max(1, (int)Math.Round(rect.Width * 0.12));
         int insetY = Math.Max(1, (int)Math.Round(rect.Height * 0.12));
         var r = new SKRectI(
@@ -287,7 +287,7 @@ public static class SheetScoreEngine
         using (var c = new SKCanvas(sub))
             c.DrawBitmap(src, r, new SKRect(0, 0, r.Width, r.Height));
 
-        // 2) Grayscale (luminance) a TEMNOST (255 - Y)
+        // 2) Grayscale (luminance) and DARKNESS (255 - Y)
         using var pm = new SKPixmap(sub.Info, sub.GetPixels(out _));
         Span<byte> dark = pm.GetPixelSpan().Length == 0
             ? new byte[0]
@@ -308,7 +308,7 @@ public static class SheetScoreEngine
                     byte R = row[x * bpp + 2];
                     // Rec. 709 luminance ≈ 0.2126 R + 0.7152 G + 0.0722 B
                     int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    byte d = (byte)(255 - y8); // TEMNOST = čím větší, tím černější
+                    byte d = (byte)(255 - y8); // DARKNESS = the larger, the blacker
                     dark[idx++] = d;
                 }
             }
@@ -316,7 +316,7 @@ public static class SheetScoreEngine
 
         if (dark.Length == 0) return 0;
 
-        // 3) Otsu práh na TEMNOSTI (robustní vůči stínu)
+        // 3) Otsu threshold on DARKNESS (robust to shadows)
         Span<int> hist = stackalloc int[256];
         for (int i = 0; i < dark.Length; i++) hist[dark[i]]++;
 
@@ -347,14 +347,14 @@ public static class SheetScoreEngine
             }
         }
 
-        // 4) Podíl "černých" pixelů (temnost >= práh)
+        // 4) Ratio of "black" pixels (darkness >= threshold)
         int black = 0;
         for (int i = 0; i < dark.Length; i++)
             if (dark[i] >= thr) black++;
 
         double pct = 100.0 * black / total;
 
-        // 5) Bezpečné ořezání intervalu
+        // 5) Safely clamp the interval
         if (double.IsNaN(pct) || pct < 0) pct = 0;
         if (pct > 100) pct = 100;
         return pct;
@@ -366,16 +366,16 @@ public static class SheetScoreEngine
         DetectSrcFidsWithOnnx(SKBitmap photo, IResourceProvider resourceProvider, string yoloOnnxLogical)
     {
         using var det = new OnnxYoloFidDetector(resourceProvider, yoloOnnxLogical, imgsz: 1024);
-        System.Diagnostics.Debug.WriteLine(OnnxYoloFidDetector.DebugListOutputs(det._session)); // pokud si zpřístupníš session
+        System.Diagnostics.Debug.WriteLine(OnnxYoloFidDetector.DebugListOutputs(det._session)); // if you expose the session
         var raw = det.Detect(photo); // (cx,cy,w,h,conf)
 
         if (raw.Count < 3)
-            throw new InvalidOperationException($"Nedostatek fiducialů na fotce: {raw.Count}");
+            throw new InvalidOperationException($"Not enough fiducials in the photo: {raw.Count}");
 
-        // dedup podle IoU (xywh), necháme vyšší conf
+        // deduplicate by IoU (xywh), keep the higher confidence
         var dets = DedupBoxes(raw, iouThr: 0.6f);
 
-        // vyber 4 a přiřaď podle geometrie (stejně jako v Pythonu)
+        // pick 4 and assign by geometry (same as in Python)
         var pts = dets.Select(d => (d.Cx, d.Cy, d.Conf)).ToList();
         if (pts.Count >= 4)
         {
@@ -384,7 +384,7 @@ public static class SheetScoreEngine
         }
         else
         {
-            // fallback: dopočti chybějící
+            // fallback: compute the missing ones
             var approx = OrderByCorners(pts.Select(p => new SKPoint((float)p.Cx, (float)p.Cy)).ToList(), photo.Width, photo.Height);
             var known = new Dictionary<string, (float x, float y, float conf)>();
             string[] NAMES = { "TL", "TR", "BR", "BL" };
@@ -422,7 +422,7 @@ public static class SheetScoreEngine
         float ix2 = Math.Min(ax2, bx2), iy2 = Math.Min(ay2, by2);
         float iw = Math.Max(0, ix2 - ix1), ih = Math.Max(0, iy2 - iy1);
         float inter = iw * ih;
-        float ua = (ax2 - ax1) * (ay1 - ay2) + (bx2 - bx1) * (by1 - by2) - inter; // pozor na znaménka
+        float ua = (ax2 - ax1) * (ay1 - ay2) + (bx2 - bx1) * (by1 - by2) - inter; // watch the signs
         ua = Math.Abs(ua); // jistota
         return ua <= 0 ? 0 : inter / ua;
     }
@@ -430,7 +430,7 @@ public static class SheetScoreEngine
     private static (SKPoint TL, SKPoint TR, SKPoint BR, SKPoint BL)
         AssignByGeometry(List<(float x, float y, float conf)> pts, int W, int H)
     {
-        // Minimalizace vzdálenosti k rohům (TL, TR, BR, BL)
+        // Minimize the distance to the corners (TL, TR, BR, BL)
         var targets = new[] { new SKPoint(0, 0), new SKPoint(W, 0), new SKPoint(W, H), new SKPoint(0, H) };
         double diag = Math.Sqrt((double)W * W + (double)H * H);
         var cand = pts.Take(Math.Min(10, pts.Count)).ToList();
@@ -438,7 +438,7 @@ public static class SheetScoreEngine
         double bestCost = 1e18;
         (SKPoint TL, SKPoint TR, SKPoint BR, SKPoint BL) best = default;
 
-        // všechny kombinace 4 z N + permutace 4!
+        // all combinations of 4 from N + permutations of 4!
         var idxs = Enumerable.Range(0, cand.Count).ToArray();
         foreach (var combo in Combinations(idxs, 4))
         {
@@ -466,7 +466,7 @@ public static class SheetScoreEngine
                                 }
                             }
         }
-        if (bestCost == 1e18) throw new InvalidOperationException("Nelze přiřadit 4 body.");
+        if (bestCost == 1e18) throw new InvalidOperationException("Unable to assign 4 points.");
         return best;
 
         static IEnumerable<int[]> Combinations(int[] arr, int choose)
@@ -547,7 +547,7 @@ public static class SheetScoreEngine
         return new TemplateData { SizeW = Wt, SizeH = Ht, Rects = rects };
     }
 
-    // ------------------------ Dst fiducials (šablona PNG nebo rohy) ------------------------
+    // ------------------------ Destination fiducials (template PNG or corners) ------------------------
     static async Task<(SKPoint TL, SKPoint TR, SKPoint BR, SKPoint BL)>
         TryDetectDstFidsOrCornersAsync(IResourceProvider resourceProvider, string fidPngLogicalName, int Wt, int Ht)
     {
@@ -570,7 +570,7 @@ public static class SheetScoreEngine
         var (bin, _) = BinarizeObjectsWhite(gray);
         var comps = ConnectedComponents(bin);
         var top = comps.OrderByDescending(c => c.Count).Take(4).ToList();
-        if (top.Count < 4) throw new InvalidOperationException("Ve fiducial šabloně nejsou 4 markery.");
+        if (top.Count < 4) throw new InvalidOperationException("The fiducial template does not contain 4 markers.");
         var pts = top.Select(c => new SKPoint((float)c.Cx, (float)c.Cy)).ToList();
         var ordered = OrderByCorners(pts, src.Width, src.Height);
         return (ordered[0], ordered[1], ordered[2], ordered[3]); // TL,TR,BR,BL
@@ -643,7 +643,7 @@ public static class SheetScoreEngine
         using var canvas = new SKCanvas(dst);
         canvas.Clear(SKColors.Black);
 
-        // Skia matice odpovídá:
+        // The Skia matrix corresponds to:
         // x' = (a*x + b*y + c) / (g*x + h*y + 1)
         // y' = (d*x + e*y + f) / (g*x + h*y + 1)
         var m = new SKMatrix
@@ -691,7 +691,7 @@ public static class SheetScoreEngine
                     byte g = (byte)((c >> 8) & 0xFF);
                     byte r = (byte)((c >> 16) & 0xFF);
                     byte a = (byte)((c >> 24) & 0xFF);
-                    int add = 255 - a; // kompozice na bílou
+                    int add = 255 - a; // composite onto white
                     int rOut = r + add, gOut = g + add, bOut = b + add;
                     int v = (int)Math.Round(0.299 * rOut + 0.587 * gOut + 0.114 * bOut);
                     dp[x] = (byte)(v < 0 ? 0 : (v > 255 ? 255 : v));
@@ -1068,7 +1068,7 @@ public static class SheetScoreEngine
         IReadOnlyList<SKPoint> fiducialsWarped,
         float visibilityThreshold)
     {
-        // Připrav mapu slotu 0..5 pro každý index (kvůli číslici v boxu)
+        // Prepare the slot map 0..5 for each index (for the digit in the box)
         var slotByIndex = Enumerable.Repeat(-1, rects.Count).ToArray();
         for (int gi = 0; gi < groups.Count; gi++)
             for (int s = 0; s < 6; s++)
@@ -1080,7 +1080,7 @@ public static class SheetScoreEngine
         const int rowsPerTable = 5;
         const int colsPerTable = 3;
         const int totalTables = tablesPerRowBlock * 2;
-        const int groupsPerRowPair = colsPerTable * tablesPerRowBlock; // očekáváme 6 šestic v jednom řádku tabulek
+        const int groupsPerRowPair = colsPerTable * tablesPerRowBlock; // expect 6 sextets in one table row
 
         var rowSums = new int[totalTables, rowsPerTable];
         var colSums = new int[totalTables, colsPerTable];
@@ -1106,7 +1106,7 @@ public static class SheetScoreEngine
             var orangeStroke = new SKPaint { Color = new SKColor(255, 140, 0), Style = SKPaintStyle.Stroke, StrokeWidth = 3f, IsAntialias = true };
             var orangeFill = new SKPaint { Color = new SKColor(255, 140, 0, 160), Style = SKPaintStyle.Fill, IsAntialias = true };
 
-            // texty
+            // text
             var txt = new SKPaint { Color = SKColors.Blue, TextSize = 30, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) };
             var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 180), TextSize = 30, IsAntialias = true, Typeface = txt.Typeface };
 
@@ -1123,11 +1123,11 @@ public static class SheetScoreEngine
                 }
             }
 
-            // 2.1 rámečky šestic
+            // 2.1 sextet outlines
             for (int gi = 0; gi < groups.Count; gi++)
             {
                 var g = groups[gi];
-                // union 6ti rectů
+                // union of 6 rects
                 var rs = g.Indices.Select(i => rects[i]).ToArray();
                 int minX = rs.Min(r => r.Left), minY = rs.Min(r => r.Top);
                 int maxX = rs.Max(r => r.Right), maxY = rs.Max(r => r.Bottom);
@@ -1202,23 +1202,23 @@ public static class SheetScoreEngine
                 }
             }
 
-            // 2.2 boxy + popisky
+            // 2.2 boxes + labels
             for (int i = 0; i < rects.Count; i++)
             {
                 var r = rects[i];
                 bool isWin = winners.Contains(i);
                 c.DrawRect(new SKRect(r.Left, r.Top, r.Right, r.Bottom), isWin ? green : red);
 
-                // popisky: index, % fill, slot 0..5
+                // labels: index, % fill, slot 0..5
                 string idxLabel = $"#{i}";
                 string fillLabel = $"{Math.Round(pList[i] * 100)}%";
-                // ukazovat jen kdyz hodnota prekroci viditelnostni prah
+                // show only when the value exceeds the visibility threshold
                 bool showFill = pList[i] > visibilityThreshold;
 
 
                 string slotLabel = slotByIndex[i] >= 0 ? slotByIndex[i].ToString() : "?";
 
-                // umístění: index vlevo nahoře, % vpravo dole, slot doprostřed
+                // placement: index top-left, % bottom-right, slot in the middle
                 if (showFill)
                 {
                     DrawText(c, idxLabel, r.Left - 35, r.Top - 5, txt, shadow);
