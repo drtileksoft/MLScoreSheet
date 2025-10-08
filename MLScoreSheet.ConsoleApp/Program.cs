@@ -10,10 +10,10 @@ try
     //    return 1;
     //}
 
-    string? inputPath = "photo.jpeg";
+    string? inputPath = "photo2.jpeg";
     string? outputPath = "output.jpg";
-    float? calculationThreshold = 0.3f;
-    float? overlayThreshold = 0.2f;
+    float? calculationThreshold = 0.25f;
+    float? overlayThreshold = 0.24f;
     bool autoThreshold = false;
 
     for (int i = 0; i < args.Length; i++)

@@ -17,7 +17,7 @@ public static class SheetScoreEngine
     public static async Task<int> ComputeTotalScoreAsync(
         Stream photoStream,
         IResourceProvider resourceProvider,
-        string yoloOnnxLogical = "yolo_fids.onnx",
+        string yoloOnnxLogical = "best.onnx",
         string rectsJsonLogical = "boxes_rects.json",
         string fidPngLogical = "ocrscoresheetfiducials.png",
         float fixedThreshold = 0.35f,
@@ -57,7 +57,7 @@ public static class SheetScoreEngine
     public static async Task<ScoreOverlayResult> ComputeTotalScoreWithOverlayAsync(
         Stream photoStream,
         IResourceProvider resourceProvider,
-        string yoloOnnxLogical = "yolo_fids.onnx",
+        string yoloOnnxLogical = "best.onnx",
         string rectsJsonLogical = "boxes_rects.json",
         string fidPngLogical = "ocrscoresheetfiducials.png",
         float fixedThreshold = 0.35f,
