@@ -123,9 +123,9 @@ public partial class MainPage : ContentPage
 
             await RunDetection(copyPath);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlert("Error", "Please retake the photo or adjust it (crop and straighten) before trying again.", "OK");
         }
     }
 
@@ -166,9 +166,9 @@ public partial class MainPage : ContentPage
         {
             await DisplayAlert("Error", "Camera or storage permissions are missing.", "OK");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlert("Error", "Please retake the photo or adjust it (crop and straighten) before trying again.", "OK");
         }
 #else
         await DisplayAlert("Info", "Capturing photos is only supported on Android and iOS.", "OK");
@@ -231,9 +231,9 @@ public partial class MainPage : ContentPage
             }
             UpdateSaveButtonState();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlert("Error", "Please retake the photo or adjust it (crop and straighten) before trying again.", "OK");
         }
         finally
         {
@@ -260,9 +260,9 @@ public partial class MainPage : ContentPage
             await _gallerySaver.SaveImageAsync(_lastImagePath, fileName, CancellationToken.None);
             await DisplayAlert("Success", "The image was saved to the gallery.", "OK");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlert("Error", "Please retake the photo or adjust it (crop and straighten) before trying again.", "OK");
         }
     }
 

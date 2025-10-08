@@ -40,19 +40,19 @@ try
                 PrintUsage();
                 return 0;
             default:
-                throw new ArgumentException($"Neznámý argument: {args[i]}");
+                throw new ArgumentException($"Unknown argument: {args[i]}");
                 break;
         }
     }
 
     if (string.IsNullOrWhiteSpace(inputPath))
     {
-        throw new ArgumentException("Chybí cesta k vstupní fotce.");
+        throw new ArgumentException("Missing path to the input photo.");
     }
 
     if (!File.Exists(inputPath))
     {
-        throw new FileNotFoundException($"Soubor {inputPath} neexistuje.", inputPath);
+        throw new FileNotFoundException($"File {inputPath} does not exist.", inputPath);
     }
 
     outputPath ??= Path.ChangeExtension(inputPath, ".overlay.png");
@@ -69,17 +69,17 @@ try
         autoThreshold: autoThreshold,
         overlayVisibilityThreshold: overlayThr);
 
-    Console.WriteLine($"Výsledné skóre: {result.Total}");
-    Console.WriteLine($"Použitý práh: {result.ThresholdUsed:F2}");
+    Console.WriteLine($"Total score: {result.Total}");
+    Console.WriteLine($"Applied threshold: {result.ThresholdUsed:F2}");
 
-    Console.WriteLine($"Overlay ulkládám do {outputPath}...");
+    Console.WriteLine($"Saving overlay to {outputPath}...");
     SaveOverlay(result.Overlay, outputPath);
-    Console.WriteLine($"Overlay uložen do: {outputPath}");
+    Console.WriteLine($"Overlay saved to: {outputPath}");
     return 0;
 }
 catch (ArgumentException ex)
 {
-    Console.Error.WriteLine($"Chyba argumentů: {ex.Message}");
+    Console.Error.WriteLine($"Argument error: {ex.Message}");
     PrintUsage();
     return 1;
 }
@@ -90,7 +90,7 @@ catch (FileNotFoundException ex)
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"Chyba: {ex.Message}");
+    Console.Error.WriteLine($"Error: {ex.Message}");
     return 2;
 }
 
@@ -98,7 +98,7 @@ static string ReadNext(string[] args, ref int index)
 {
     if (index + 1 >= args.Length)
     {
-        throw new ArgumentException($"Argument {args[index]} vyžaduje hodnotu.");
+        throw new ArgumentException($"Argument {args[index]} requires a value.");
     }
 
     index++;
@@ -109,7 +109,7 @@ static float ParseFloat(string value)
 {
     if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float result))
     {
-        throw new ArgumentException($"Neplatná číselná hodnota: {value}");
+        throw new ArgumentException($"Invalid numeric value: {value}");
     }
 
     return result;
@@ -125,7 +125,7 @@ static void SaveOverlay(SKBitmap overlay, string outputPath)
 
 static void PrintUsage()
 {
-    Console.WriteLine("Použití: mlscoresheet-console [--input <soubor>] [--output <soubor>] [--calc-threshold <hodnota>] [--overlay-threshold <hodnota>] [--auto-threshold]");
+    Console.WriteLine("Usage: mlscoresheet-console [--input <file>] [--output <file>] [--calc-threshold <value>] [--overlay-threshold <value>] [--auto-threshold]");
 }
 
 internal sealed class FileResourceProvider : IResourceProvider
@@ -142,7 +142,7 @@ internal sealed class FileResourceProvider : IResourceProvider
         var path = Path.Combine(_baseDirectory, logicalName);
         if (!File.Exists(path))
         {
-            throw new FileNotFoundException($"Resource {logicalName} nebyl nalezen.", path);
+            throw new FileNotFoundException($"Resource {logicalName} was not found.", path);
         }
 
         Stream stream = File.OpenRead(path);
