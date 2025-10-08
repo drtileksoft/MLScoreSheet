@@ -1,7 +1,8 @@
-using System.IO;
 using MLScoreSheet.Core;
-using Xunit;
+using MLScoreSheet.Core.Tests;
+using System.IO;
 using System.Text.Json;
+using Xunit;
 
 public sealed class SheetScoreEngineTests
 {
@@ -43,17 +44,20 @@ public sealed class SheetScoreEngineTests
     [Fact]
     public async Task ComputeTotalScoreWithOverlayAsync_ReturnsExpectedOverlayDetails_ForPhoto2()
     {
-        var photoPath = TestResourceProvider.GetAssetPath("photo.jpeg");
+        var photoPath = TestResourceProvider.GetAssetPath("photo2.jpeg");
         using var photoStream = File.OpenRead(photoPath);
 
         var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
             photoStream,
             _resourceProvider,
-            fixedThreshold: 0.30f,
+            fixedThreshold: 0.25f,
             overlayVisibilityThreshold: 0.24f);
 
         var details = result.Details;
         var expected = LoadOverlayExpectations("photo_overlay_expected.json");
+
+        // Uncomment to update the snapshot file if the expectations change
+        //OverlayExpectationsIo.SaveDetailsSnapshot(result.Details, "photo_overlay_expected.json");
 
         Assert.Equal(expected.WinnerMap.Length, details.WinnerMap.Length);
         for (int i = 0; i < details.WinnerMap.Length; i++)
@@ -86,13 +90,6 @@ public sealed class SheetScoreEngineTests
         }
     }
 
-    private sealed class OverlayExpectations
-    {
-        public int[] WinnerMap { get; set; } = Array.Empty<int>();
-        public int[][] RowSums { get; set; } = Array.Empty<int[]>();
-        public int[][] ColumnSums { get; set; } = Array.Empty<int[]>();
-        public int[] TableTotals { get; set; } = Array.Empty<int>();
-    }
 
     private sealed class TestResourceProvider : IResourceProvider
     {
