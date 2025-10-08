@@ -34,7 +34,7 @@ namespace MLScoreSheetCounter.Platforms.iOS
         private static void ThrowCameraDenied()
         {
             throw new UnauthorizedAccessException(
-                "Přístup ke kameře byl odepřen. Povolit lze v Nastavení → Soukromí → Fotoaparát.");
+                "Camera access was denied. You can allow it in Settings → Privacy → Camera.");
         }
 
         // PHOTOS (READ/WRITE) -----------------------------------------------------
@@ -46,10 +46,10 @@ namespace MLScoreSheetCounter.Platforms.iOS
                 status = await RequestPhotosAsync(PHAccessLevel.ReadWrite);
             }
 
-            // iOS může vrátit "Limited" – to pro čtení stačí
+            // iOS can return "Limited" – that is sufficient for reading
             if (status != PHAuthorizationStatus.Authorized && status != PHAuthorizationStatus.Limited)
             {
-                ThrowPhotosDenied("čtení z knihovny fotek");
+                ThrowPhotosDenied("reading from the photo library");
             }
         }
 
@@ -63,7 +63,7 @@ namespace MLScoreSheetCounter.Platforms.iOS
 
             if (status != PHAuthorizationStatus.Authorized)
             {
-                ThrowPhotosDenied("ukládání do knihovny fotek");
+                ThrowPhotosDenied("saving to the photo library");
             }
         }
 
@@ -77,10 +77,10 @@ namespace MLScoreSheetCounter.Platforms.iOS
         private static void ThrowPhotosDenied(string what)
         {
             throw new UnauthorizedAccessException(
-                $"Oprávnění pro {what} bylo odepřeno. Povolit lze v Nastavení → Soukromí → Fotky.");
+                $"Permission for {what} was denied. You can allow it in Settings → Privacy → Photos.");
         }
 
-        // Volitelné: otevření nastavení appky
+        // Optional: open the app settings
         public static void OpenAppSettings()
         {
             var url = new NSUrl(UIApplication.OpenSettingsUrlString);

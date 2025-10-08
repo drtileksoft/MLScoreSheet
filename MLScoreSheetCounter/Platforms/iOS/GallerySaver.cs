@@ -20,13 +20,13 @@ public partial class GallerySaver : IGallerySaver
 
         if (status is not (PHAuthorizationStatus.Authorized or PHAuthorizationStatus.Limited))
         {
-            throw new InvalidOperationException("Aplikace nemá oprávnění ukládat do fotogalerie.");
+            throw new InvalidOperationException("The app does not have permission to save to the photo library.");
         }
 
         var url = NSUrl.FromFilename(filePath);
         if (url == null)
         {
-            throw new InvalidOperationException("Nelze otevřít soubor pro uložení.");
+            throw new InvalidOperationException("Unable to open the file for saving.");
         }
 
 

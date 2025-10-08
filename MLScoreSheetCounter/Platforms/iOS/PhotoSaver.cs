@@ -8,11 +8,11 @@ using UIKit;
 namespace MLScoreSheetCounter.Platforms.iOS
 {
     /// <summary>
-    /// Helpery pro ukládání fotek do Fotek (Photos) s podporou async.
+    /// Helpers for saving photos to the Photos library with async support.
     /// </summary>
     public static class PhotoSaver
     {
-        // --- 1) Async wrapper pro PHPhotoLibrary.PerformChanges ---
+        // --- 1) Async wrapper for PHPhotoLibrary.PerformChanges ---
         public static Task<bool> PerformChangesAsync(this PHPhotoLibrary library, Action changeHandler)
         {
             if (library is null) throw new ArgumentNullException(nameof(library));
@@ -37,7 +37,7 @@ namespace MLScoreSheetCounter.Platforms.iOS
             return tcs.Task;
         }
 
-        // --- 2) Zajištění oprávnění: iOS 14+ používá AccessLevel ---
+        // --- 2) Ensure permissions: iOS 14+ uses AccessLevel ---
         public static async Task EnsureAddOnlyAuthorizationAsync()
         {
             var status = PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.AddOnly);
@@ -46,7 +46,7 @@ namespace MLScoreSheetCounter.Platforms.iOS
 
             status = await RequestAddOnlyAuthorizationAsync();
             if (status != PHAuthorizationStatus.Authorized)
-                throw new UnauthorizedAccessException("Přístup k ukládání do Fotek nebyl povolen.");
+                throw new UnauthorizedAccessException("Saving to the Photos library was not authorized.");
         }
 
         private static Task<PHAuthorizationStatus> RequestAddOnlyAuthorizationAsync()
@@ -56,14 +56,14 @@ namespace MLScoreSheetCounter.Platforms.iOS
             return tcs.Task;
         }
 
-        // --- 3) Uložení fotky ze souboru (NSUrl) ---
+        // --- 3) Save a photo from a file (NSUrl) ---
         /// <summary>
-        /// Uloží fotku (soubor) do knihovny Fotek.
+        /// Saves a photo (file) to the Photos library.
         /// </summary>
-        /// <param name="fileUrl">NSUrl na lokální soubor (např. v /tmp nebo /Documents).</param>
+        /// <param name="fileUrl">NSUrl to a local file (for example in /tmp or /Documents).</param>
         /// <param name="shouldMoveFile">
-        /// true = soubor se po přidání přesune (musí být v místě, kam má app právo zapisovat/měnit),
-        /// false = zůstane a data se zkopírují.
+        /// true = move the file after adding (the app must have permission to modify the location),
+        /// false = keep the file in place and copy the data.
         /// </param>
         public static async Task SavePhotoFileAsync(NSUrl fileUrl, bool shouldMoveFile = false)
         {
@@ -83,7 +83,7 @@ namespace MLScoreSheetCounter.Platforms.iOS
             });
         }
 
-        // --- 4) Uložení fotky z paměti (NSData/byte[]/UIImage) ---
+        // --- 4) Save a photo from memory (NSData/byte[]/UIImage) ---
         public static async Task SavePhotoDataAsync(NSData data)
         {
             if (data is null) throw new ArgumentNullException(nameof(data));
@@ -105,12 +105,12 @@ namespace MLScoreSheetCounter.Platforms.iOS
         {
             if (image is null) throw new ArgumentNullException(nameof(image));
 
-            // Ulož jako JPEG (můžeš změnit na PNG: image.AsPNG())
+            // Save as JPEG (switch to PNG with image.AsPNG() if needed)
             using var data = image.AsJPEG(jpegQuality);
             await SavePhotoDataAsync(data);
         }
 
-        // --- 5) Pomocník: uloží stream do /tmp a pak do Fotek ---
+        // --- 5) Helper: save a stream to /tmp and then to Photos ---
         public static async Task SaveStreamAsync(Stream stream, string fileName = "photo.jpg", bool shouldMoveFile = true)
         {
             if (stream is null) throw new ArgumentNullException(nameof(stream));

@@ -16,7 +16,7 @@ public static class ServiceHelper
     {
         if (_services == null)
         {
-            throw new InvalidOperationException("Služby nejsou inicializovány.");
+            throw new InvalidOperationException("Services have not been initialized.");
         }
 
         return _services.GetRequiredService<T>();
