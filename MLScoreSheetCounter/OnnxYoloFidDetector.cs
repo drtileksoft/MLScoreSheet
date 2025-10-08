@@ -361,11 +361,11 @@ namespace MLScoreSheetCounter
         // ---------- Debug výpis výstupů ----------
         public static string DebugListOutputs(InferenceSession session)
         {
-            var metadata = session.OutputMetadata.Select(kv => new KeyValuePair<string, IReadOnlyList<long?>>(kv.Key, kv.Value.Dimensions));
+            var metadata = session.OutputMetadata.Select(kv => new KeyValuePair<string, IReadOnlyList<int>>(kv.Key, kv.Value.Dimensions));
             return DebugListOutputs(metadata);
         }
 
-        public static string DebugListOutputs(IEnumerable<KeyValuePair<string, IReadOnlyList<long?>>> metadata)
+        public static string DebugListOutputs(IEnumerable<KeyValuePair<string, IReadOnlyList<int>>> metadata)
         {
             var sb = new System.Text.StringBuilder();
             foreach (var kv in metadata)
@@ -379,8 +379,7 @@ namespace MLScoreSheetCounter
                     {
                         if (i > 0) sb.Append(",");
                         var dim = dims[i];
-                        if (dim.HasValue)
-                            sb.Append(dim.Value);
+                        sb.Append(dim);
                     }
                 }
                 sb.AppendLine("]");

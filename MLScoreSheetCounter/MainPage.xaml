@@ -2,90 +2,173 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:MLScoreSheetCounter.Controls"
-             x:Class="MLScoreSheetCounter.MainPage">
+             x:Class="MLScoreSheetCounter.MainPage"
+             Padding="16">
 
-    <Grid Padding="16" RowSpacing="12">
+    <Grid RowSpacing="12" ColumnSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <!-- Photo actions -->
             <RowDefinition Height="Auto" />
+            <!-- Overlay toggle -->
             <RowDefinition Height="Auto" />
+            <!-- Calculation threshold -->
             <RowDefinition Height="Auto" />
+            <!-- Visibility threshold -->
             <RowDefinition Height="Auto" />
+            <!-- Result -->
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <!-- Processing row -->
+            <RowDefinition Height="*"   />
+            <!-- Preview -->
             <RowDefinition Height="Auto" />
+            <!-- Save -->
         </Grid.RowDefinitions>
 
-        <VerticalStackLayout Grid.Row="0" Spacing="8">
-            <Button x:Name="PickPhotoButton" Text="Vybrat fotku z galerie" Clicked="OnPickPhoto" />
-            <Button x:Name="TakePhotoButton" Text="Vyfotit" Clicked="OnTakePhoto" />
-        </VerticalStackLayout>
+        <!-- Row 0: Photo actions (two stacked buttons via 2-row Grid) -->
+        <Grid Grid.Row="0" RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <HorizontalStackLayout Grid.Row="1" Spacing="8" VerticalOptions="Center">
-            <CheckBox x:Name="OverlayCheckBox" IsChecked="True" />
-            <Label Text="Zobrazit zvýraznění" VerticalTextAlignment="Center" />
-        </HorizontalStackLayout>
+            <Button x:Name="PickPhotoButton"
+                    Grid.Row="0"
+                    Text="Pick photo from gallery"
+                    Clicked="OnPickPhoto"
+                    SemanticProperties.Description="Pick a photo from the device gallery" />
 
-        <HorizontalStackLayout Grid.Row="2" Spacing="8" VerticalOptions="Center">
-            <Label Text="Práh výpočtu" VerticalTextAlignment="Center" />
+            <Button x:Name="TakePhotoButton"
+                    Grid.Row="1"
+                    Text="Take photo"
+                    Clicked="OnTakePhoto"
+                    SemanticProperties.Description="Capture a photo with the camera" />
+        </Grid>
+
+        <!-- Row 1: Overlay toggle -->
+        <Grid Grid.Row="1" ColumnSpacing="8" VerticalOptions="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <CheckBox x:Name="OverlayCheckBox"
+                      Grid.Column="0"
+                      IsChecked="True"
+                      VerticalOptions="Center"
+                      SemanticProperties.Description="Show detection overlay on the image" />
+
+            <Label Grid.Column="1"
+                   Text="Show results in overlay"
+                   VerticalTextAlignment="Center" />
+        </Grid>
+
+        <!-- Row 2: Calculation threshold: Label | Slider (star) | Value (fixed) -->
+        <Grid Grid.Row="2" ColumnSpacing="8" VerticalOptions="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <!-- Slider grows by star sizing -->
+                <ColumnDefinition Width="60" />
+                <!-- Fixed width for value -->
+            </Grid.ColumnDefinitions>
+
+            <Label Grid.Column="0"
+                   Text="Ink fill threshold"
+                   VerticalTextAlignment="Center" />
+
             <Slider x:Name="CalculationTresholdSlider"
+                    Grid.Column="1"
                     Minimum="0"
                     Maximum="1"
                     Value="0.3"
-                    HorizontalOptions="FillAndExpand"
-                    ValueChanged="OnCalculationThresholdChanged" />
+                    ValueChanged="OnCalculationThresholdChanged"
+                    SemanticProperties.Description="Adjust the calculation threshold for Box fill sensitivity" />
+
             <Label x:Name="CalculationThresholdValueLabel"
-                   Text="0.35"
-                   WidthRequest="50"
+                   Grid.Column="2"
+                   Text="0.30"
                    HorizontalTextAlignment="End"
                    VerticalTextAlignment="Center" />
-        </HorizontalStackLayout>
+        </Grid>
 
-        <HorizontalStackLayout Grid.Row="3" Spacing="8" VerticalOptions="Center">
-            <Label Text="Práh viditelnosti" VerticalTextAlignment="Center" />
+        <!-- Row 3: Visibility threshold: Label | Slider (star) | Value (fixed) -->
+        <Grid Grid.Row="3" ColumnSpacing="8" VerticalOptions="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <!-- Slider grows by star sizing -->
+                <ColumnDefinition Width="60" />
+            </Grid.ColumnDefinitions>
+
+            <Label Grid.Column="0"
+                   Text="Details Ink fill threshold"
+                   VerticalTextAlignment="Center" />
+
             <Slider x:Name="VisibilityTresholdSlider"
+                    Grid.Column="1"
                     Minimum="0"
                     Maximum="1"
                     Value="0.3"
-                    HorizontalOptions="FillAndExpand"
-                    ValueChanged="OnVisibilityThresholdChanged" />
+                    ValueChanged="OnVisibilityThresholdChanged"
+                    SemanticProperties.Description="Adjust the debug overlay visibility threshold" />
+
             <Label x:Name="VisibilityThresholdValueLabel"
+                   Grid.Column="2"
                    Text="0.30"
-                   WidthRequest="50"
                    HorizontalTextAlignment="End"
                    VerticalTextAlignment="Center" />
-        </HorizontalStackLayout>
+        </Grid>
 
+        <!-- Row 4: Result -->
         <Label x:Name="ResultLabel"
                Grid.Row="4"
                Text="TOTAL = ?"
                FontSize="18"
-               FontAttributes="Bold" />
+               FontAttributes="Bold"
+               SemanticProperties.HeadingLevel="Level2" />
 
-        <HorizontalStackLayout x:Name="ProcessingContainer"
-                                Grid.Row="5"
-                                IsVisible="False"
-                                Spacing="8"
-                                VerticalOptions="Center">
-            <ActivityIndicator x:Name="ProcessingIndicator" IsRunning="False" VerticalOptions="Center" />
-            <Label x:Name="ProcessingLabel" Text="Probíhá zpracování..." VerticalTextAlignment="Center" />
-        </HorizontalStackLayout>
+        <!-- Row 5: Processing row: Spinner | Text -->
+        <Grid x:Name="ProcessingContainer"
+              Grid.Row="5"
+              ColumnSpacing="8"
+              IsVisible="False"
+              VerticalOptions="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
+            <ActivityIndicator x:Name="ProcessingIndicator"
+                               Grid.Column="0"
+                               IsRunning="False"
+                               VerticalOptions="Center" />
+            <Label x:Name="ProcessingLabel"
+                   Grid.Column="1"
+                   Text="Processing..."
+                   VerticalTextAlignment="Center" />
+        </Grid>
+
+        <!-- Row 6: Preview (fills the remaining space thanks to RowDefinition "*") -->
         <controls:PanPinchContainer x:Name="PreviewContainer"
-                                       Grid.Row="6"
-                                       BackgroundColor="#111"
-                                       VerticalOptions="Fill"
-                                       HorizontalOptions="Fill">
+                                    Grid.Row="6"
+                                    BackgroundColor="#111"
+                                    VerticalOptions="Fill"
+                                    HorizontalOptions="Fill">
             <Image x:Name="Preview"
-               Aspect="AspectFit"
-               VerticalOptions="Center"
-               HorizontalOptions="Center" />
+                   Aspect="AspectFit"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Center"
+                   AutomationProperties.IsInAccessibleTree="True"
+                   SemanticProperties.Description="Preview of the selected photo with pan and zoom" />
         </controls:PanPinchContainer>
 
+        <!-- Row 7: Save -->
         <Button x:Name="SaveToGalleryButton"
                 Grid.Row="7"
-                Text="Uložit do galerie"
+                Text="Save to gallery"
                 IsEnabled="False"
-                Clicked="OnSaveToGalleryClicked" />
+                Clicked="OnSaveToGalleryClicked"
+                SemanticProperties.Description="Save the current preview to gallery" />
     </Grid>
 </ContentPage>
