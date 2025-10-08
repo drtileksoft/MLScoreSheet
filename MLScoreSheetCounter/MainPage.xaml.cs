@@ -4,14 +4,15 @@ using SkiaSharp;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
+using MLScoreSheet.Core;
 using MLScoreSheetCounter.Services;
-using YourApp.Services;
 
 namespace MLScoreSheetCounter;
 
 public partial class MainPage : ContentPage
 {
     private readonly IGallerySaver _gallerySaver;
+    private readonly IResourceProvider _resourceProvider = new MauiAssetResourceProvider();
     private string? _lastImagePath;
     public MainPage()
     {
@@ -173,6 +174,7 @@ public partial class MainPage : ContentPage
                     using var photoWithOverlay = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
                         photoWithOverlay,
+                        _resourceProvider,
                         fixedThreshold: calculationThreshold,
                         autoThreshold: false,
                         overlayVisibilityThreshold: visibilityThreshold);
@@ -198,6 +200,7 @@ public partial class MainPage : ContentPage
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
                         photo,
+                        _resourceProvider,
                         fixedThreshold: calculationThreshold,
                         autoThreshold: false);
                 });
