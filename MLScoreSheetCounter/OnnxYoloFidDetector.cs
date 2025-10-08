@@ -361,15 +361,27 @@ namespace MLScoreSheetCounter
         // ---------- Debug výpis výstupů ----------
         public static string DebugListOutputs(InferenceSession session)
         {
+            var metadata = session.OutputMetadata.Select(kv => new KeyValuePair<string, IReadOnlyList<long?>>(kv.Key, kv.Value.Dimensions));
+            return DebugListOutputs(metadata);
+        }
+
+        public static string DebugListOutputs(IEnumerable<KeyValuePair<string, IReadOnlyList<long?>>> metadata)
+        {
             var sb = new System.Text.StringBuilder();
-            foreach (var kv in session.OutputMetadata)
+            foreach (var kv in metadata)
             {
                 sb.Append(kv.Key).Append(": [");
-                var md = kv.Value;
-                for (int i = 0; i < md.Dimensions.Length; i++)
+                var dims = kv.Value;
+                if (dims != null)
                 {
-                    if (i > 0) sb.Append(",");
-                    sb.Append(md.Dimensions[i]);
+                    int count = dims.Count;
+                    for (int i = 0; i < count; i++)
+                    {
+                        if (i > 0) sb.Append(",");
+                        var dim = dims[i];
+                        if (dim.HasValue)
+                            sb.Append(dim.Value);
+                    }
                 }
                 sb.AppendLine("]");
             }
