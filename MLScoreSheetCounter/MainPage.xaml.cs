@@ -68,7 +68,6 @@ public partial class MainPage : ContentPage
 
     private void ResetPreview()
     {
-        PreviewContainer.Reset();
         Preview.Source = null;
         _lastImagePath = null;
         UpdateSaveButtonState();

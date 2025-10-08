@@ -71,16 +71,16 @@
             <Label x:Name="ProcessingLabel" Text="Probíhá zpracování..." VerticalTextAlignment="Center" />
         </HorizontalStackLayout>
 
-        <controls:PinchToZoomContainer x:Name="PreviewContainer"
+        <controls:PanPinchContainer x:Name="PreviewContainer"
                                        Grid.Row="6"
                                        BackgroundColor="#111"
                                        VerticalOptions="Fill"
                                        HorizontalOptions="Fill">
             <Image x:Name="Preview"
-                   Aspect="AspectFit"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Center" />
-        </controls:PinchToZoomContainer>
+               Aspect="AspectFit"
+               VerticalOptions="Center"
+               HorizontalOptions="Center" />
+        </controls:PanPinchContainer>
 
         <Button x:Name="SaveToGalleryButton"
                 Grid.Row="7"
