@@ -19,6 +19,7 @@ public partial class MainPage : ContentPage
         InitializeComponent();
         _gallerySaver = ServiceHelper.GetRequiredService<IGallerySaver>();
         UpdateThresholdLabels();
+        ShowPreview(false);
     }
 
     private float GetCalculationThreshold() => (float)(CalculationTresholdSlider?.Value ?? 0.30);
@@ -72,6 +73,7 @@ public partial class MainPage : ContentPage
         Preview.Source = null;
         _lastImagePath = null;
         UpdateSaveButtonState();
+        ShowPreview(false);
     }
 
     private void UpdateSaveButtonState()
@@ -79,6 +81,22 @@ public partial class MainPage : ContentPage
         MainThread.BeginInvokeOnMainThread(() =>
         {
             SaveToGalleryButton.IsEnabled = !string.IsNullOrEmpty(_lastImagePath) && !(ProcessingIndicator?.IsRunning ?? false);
+        });
+    }
+
+    private void ShowPreview(bool isVisible)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (PreviewContainer != null)
+            {
+                PreviewContainer.IsVisible = isVisible;
+            }
+
+            if (PreviewPlaceholder != null)
+            {
+                PreviewPlaceholder.IsVisible = !isVisible;
+            }
         });
     }
 
@@ -114,7 +132,7 @@ public partial class MainPage : ContentPage
     private async void OnTakePhoto(object sender, EventArgs e)
     {
 #if IOS
-            // před focením získej povolení ke kameře
+            // Obtain camera permission before capturing photos
             await MLScoreSheetCounter.Platforms.iOS.IosPermissions.EnsureCameraAsync();
 #endif
 #if ANDROID || IOS
@@ -142,18 +160,18 @@ public partial class MainPage : ContentPage
         }
         catch (FeatureNotSupportedException)
         {
-            await DisplayAlert("Error", "Zařízení nemá podporu pro kameru.", "OK");
+            await DisplayAlert("Error", "This device does not support the camera.", "OK");
         }
         catch (PermissionException)
         {
-            await DisplayAlert("Error", "Chybí oprávnění ke kameře/úložišti.", "OK");
+            await DisplayAlert("Error", "Camera or storage permissions are missing.", "OK");
         }
         catch (Exception ex)
         {
             await DisplayAlert("Error", ex.Message, "OK");
         }
 #else
-        await DisplayAlert("Info", "Fotit lze jen na Android/iOS.", "OK");
+        await DisplayAlert("Info", "Capturing photos is only supported on Android and iOS.", "OK");
 #endif
     }
 
@@ -192,6 +210,7 @@ public partial class MainPage : ContentPage
 
                 _lastImagePath = overlayPath;
                 Preview.Source = ImageSource.FromFile(overlayPath);
+                ShowPreview(true);
             }
             else
             {
@@ -208,6 +227,7 @@ public partial class MainPage : ContentPage
                 ResultLabel.Text = $"TOTAL = {total}";
                 _lastImagePath = photoPath;
                 Preview.Source = ImageSource.FromFile(photoPath);
+                ShowPreview(true);
             }
             UpdateSaveButtonState();
         }
@@ -232,13 +252,13 @@ public partial class MainPage : ContentPage
         {
             if (!await EnsureSavePermissionAsync())
             {
-                await DisplayAlert("Error", "Bez oprávnění nelze uložit do galerie.", "OK");
+                await DisplayAlert("Error", "Cannot save to the gallery without permission.", "OK");
                 return;
             }
 
             var fileName = Path.GetFileName(_lastImagePath);
             await _gallerySaver.SaveImageAsync(_lastImagePath, fileName, CancellationToken.None);
-            await DisplayAlert("Hotovo", "Obrázek byl uložen do galerie.", "OK");
+            await DisplayAlert("Success", "The image was saved to the gallery.", "OK");
         }
         catch (Exception ex)
         {

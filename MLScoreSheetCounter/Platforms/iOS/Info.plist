@@ -14,11 +14,11 @@
 		<string>arm64</string>
 	</array>
   <key>NSCameraUsageDescription</key>
-  <string>Aplikace potřebuje přístup ke kameře pro focení výsledkových listů.</string>
+  <string>The app needs camera access to capture score sheets.</string>
   <key>NSPhotoLibraryUsageDescription</key>
-  <string>Aplikace potřebuje číst fotky pro jejich výběr a zobrazení.</string>
+  <string>The app needs to read photos so you can pick and display them.</string>
   <key>NSPhotoLibraryAddUsageDescription</key>
-  <string>Aplikace potřebuje ukládat snímky do vaší knihovny fotek.</string>
+  <string>The app needs to save images to your photo library.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -35,8 +35,8 @@
         <key>XSAppIconAssets</key>
         <string>Assets.xcassets/appicon.appiconset</string>
         <key>NSPhotoLibraryUsageDescription</key>
-        <string>Aplikace potřebuje přístup k fotkám kvůli uložení výsledného obrázku.</string>
+        <string>The app needs access to photos to store the processed image.</string>
         <key>NSPhotoLibraryAddUsageDescription</key>
-        <string>Aplikace potřebuje oprávnění pro přidání obrázků do galerie.</string>
+        <string>The app needs permission to add images to the gallery.</string>
 </dict>
 </plist>

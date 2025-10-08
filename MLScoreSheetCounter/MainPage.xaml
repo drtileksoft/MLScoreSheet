@@ -150,18 +150,32 @@
         </Grid>
 
         <!-- Row 6: Preview (fills the remaining space thanks to RowDefinition "*") -->
-        <controls:PanPinchContainer x:Name="PreviewContainer"
-                                    Grid.Row="6"
-                                    BackgroundColor="#111"
-                                    VerticalOptions="Fill"
-                                    HorizontalOptions="Fill">
-            <Image x:Name="Preview"
-                   Aspect="AspectFit"
-                   VerticalOptions="Center"
-                   HorizontalOptions="Center"
-                   AutomationProperties.IsInAccessibleTree="True"
-                   SemanticProperties.Description="Preview of the selected photo with pan and zoom" />
-        </controls:PanPinchContainer>
+        <Grid Grid.Row="6">
+            <ContentView x:Name="PreviewPlaceholder"
+                         Padding="24"
+                         BackgroundColor="#111"
+                         HorizontalOptions="Fill"
+                         VerticalOptions="Fill">
+                <Label Text="Place the score sheet on a flat, well-lit surface. Hold the camera directly above it so the entire sheet is visible and free of shadows."
+                       TextColor="#fff"
+                       FontSize="16"
+                       HorizontalTextAlignment="Center"
+                       VerticalTextAlignment="Center" />
+            </ContentView>
+
+            <controls:PanPinchContainer x:Name="PreviewContainer"
+                                        IsVisible="False"
+                                        BackgroundColor="#111"
+                                        VerticalOptions="Fill"
+                                        HorizontalOptions="Fill">
+                <Image x:Name="Preview"
+                       Aspect="AspectFit"
+                       VerticalOptions="Center"
+                       HorizontalOptions="Center"
+                       AutomationProperties.IsInAccessibleTree="True"
+                       SemanticProperties.Description="Preview of the selected photo with pan and zoom" />
+            </controls:PanPinchContainer>
+        </Grid>
 
         <!-- Row 7: Save -->
         <Button x:Name="SaveToGalleryButton"

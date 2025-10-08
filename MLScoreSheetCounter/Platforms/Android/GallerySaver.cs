@@ -43,11 +43,11 @@ public partial class GallerySaver : IGallerySaver
         var uri = resolver.Insert(MediaStore.Images.Media.ExternalContentUri, values);
         if (uri == null)
         {
-            throw new InvalidOperationException("Nepodařilo se vytvořit položku v galerii.");
+            throw new InvalidOperationException("Failed to create a gallery entry.");
         }
 
         await using (var input = File.OpenRead(filePath))
-        await using (var output = resolver.OpenOutputStream(uri) ?? throw new InvalidOperationException("Nelze otevřít výstupní proud."))
+        await using (var output = resolver.OpenOutputStream(uri) ?? throw new InvalidOperationException("Unable to open the output stream."))
         {
             await input.CopyToAsync(output, cancellationToken);
         }
