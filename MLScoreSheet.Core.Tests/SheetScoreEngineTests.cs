@@ -9,16 +9,13 @@ public sealed class SheetScoreEngineTests
     [Fact]
     public async Task ComputeTotalScoreAsync_ReturnsExpectedScore_ForPhoto2()
     {
-        var photoPath = TestResourceProvider.GetAssetPath("photo2.jpeg");
+        var photoPath = TestResourceProvider.GetAssetPath("photo.jpeg");
         using var photoStream = File.OpenRead(photoPath);
 
         var total = await SheetScoreEngine.ComputeTotalScoreAsync(
             photoStream,
             _resourceProvider,
-            fixedThreshold: 0.25f,
-            autoThreshold: false,
-            padFrac: 0.08f,
-            openFrac: 0.03f);
+            fixedThreshold: 0.30f);
 
         Assert.Equal(43, total);
     }
@@ -26,18 +23,17 @@ public sealed class SheetScoreEngineTests
     [Fact]
     public async Task ComputeTotalScoreWithOverlayAsync_ProducesOverlayAndThreshold_ForPhoto2()
     {
-        var photoPath = TestResourceProvider.GetAssetPath("photo2.jpeg");
+        var photoPath = TestResourceProvider.GetAssetPath("photo.jpeg");
         using var photoStream = File.OpenRead(photoPath);
 
-        await using var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
+        var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
             photoStream,
             _resourceProvider,
-            fixedThreshold: 0.25f,
-            autoThreshold: false,
+            fixedThreshold: 0.30f,
             overlayVisibilityThreshold: 0.24f);
 
         Assert.Equal(43, result.Total);
-        Assert.Equal(0.25f, result.ThresholdUsed, precision: 3);
+        Assert.Equal(0.30f, result.ThresholdUsed, precision: 3);
         Assert.NotNull(result.Overlay);
         Assert.True(result.Overlay.Width > 0);
         Assert.True(result.Overlay.Height > 0);

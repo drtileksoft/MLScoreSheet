@@ -20,6 +20,6 @@
     <None Include="..\MLScoreSheetCounter\Resources\Raw\boxes_rects.json" Link="Assets\boxes_rects.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\MLScoreSheetCounter\Resources\Raw\ocrscoresheetfiducials.png" Link="Assets\ocrscoresheetfiducials.png" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\MLScoreSheetCounter\Resources\Raw\best.onnx" Link="Assets\best.onnx" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\MLScoreSheet.ConsoleApp\photo2.jpeg" Link="Assets\photo2.jpeg" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\MLScoreSheet.ConsoleApp\photo.jpeg" Link="Assets\photo.jpeg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

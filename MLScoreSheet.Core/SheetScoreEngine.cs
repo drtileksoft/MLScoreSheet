@@ -44,7 +44,7 @@ public static class SheetScoreEngine
         // --- % of black pixels in the ROI ---
         var pList = new float[tpl.Rects.Count];
         for (int i = 0; i < tpl.Rects.Count; i++)
-            pList[i] = FillRatioFromRoi(warped, tpl.Rects[i], padFrac, openFrac);
+            pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i]) / 100.0);
 
         // --- threshold ---
         float thr = autoThreshold ? AutoThresholdKMeans(pList, autoMin, autoMax, fixedThreshold, 0.12f)
@@ -268,96 +268,6 @@ public static class SheetScoreEngine
 
         decoded.Dispose();
         return rotated;
-    }
-
-
-    // --- Robust % of black pixels for a single box ---
-    static double GetFillPercent(SKBitmap src, SKRectI rect)
-    {
-        // 1) Trim edges (frame/lines) ~12% from each side
-        int insetX = Math.Max(1, (int)Math.Round(rect.Width * 0.12));
-        int insetY = Math.Max(1, (int)Math.Round(rect.Height * 0.12));
-        var r = new SKRectI(
-            rect.Left + insetX, rect.Top + insetY,
-            rect.Right - insetX, rect.Bottom - insetY
-        );
-        if (r.Width <= 2 || r.Height <= 2) return 0;
-
-        using var sub = new SKBitmap(r.Width, r.Height, src.ColorType, src.AlphaType);
-        using (var c = new SKCanvas(sub))
-            c.DrawBitmap(src, r, new SKRect(0, 0, r.Width, r.Height));
-
-        // 2) Grayscale (luminance) and DARKNESS (255 - Y)
-        using var pm = new SKPixmap(sub.Info, sub.GetPixels(out _));
-        Span<byte> dark = pm.GetPixelSpan().Length == 0
-            ? new byte[0]
-            : new byte[sub.Width * sub.Height];
-
-        int idx = 0;
-        unsafe
-        {
-            byte* p = (byte*)pm.GetPixels();
-            int bpp = pm.Info.BytesPerPixel; // RGBA8888 => 4
-            for (int y = 0; y < sub.Height; y++)
-            {
-                byte* row = p + y * pm.RowBytes;
-                for (int x = 0; x < sub.Width; x++)
-                {
-                    byte B = row[x * bpp + 0];
-                    byte G = row[x * bpp + 1];
-                    byte R = row[x * bpp + 2];
-                    // Rec. 709 luminance ≈ 0.2126 R + 0.7152 G + 0.0722 B
-                    int y8 = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    byte d = (byte)(255 - y8); // DARKNESS = the larger, the blacker
-                    dark[idx++] = d;
-                }
-            }
-        }
-
-        if (dark.Length == 0) return 0;
-
-        // 3) Otsu threshold on DARKNESS (robust to shadows)
-        Span<int> hist = stackalloc int[256];
-        for (int i = 0; i < dark.Length; i++) hist[dark[i]]++;
-
-        int total = dark.Length;
-        double sum = 0;
-        for (int t = 0; t < 256; t++) sum += t * hist[t];
-
-        double sumB = 0;
-        int wB = 0;
-        double varMax = -1;
-        int thr = 128;
-
-        for (int t = 0; t < 256; t++)
-        {
-            wB += hist[t];
-            if (wB == 0) continue;
-            int wF = total - wB;
-            if (wF == 0) break;
-
-            sumB += t * hist[t];
-            double mB = sumB / wB;
-            double mF = (sum - sumB) / wF;
-            double varBetween = wB * wF * (mB - mF) * (mB - mF);
-            if (varBetween > varMax)
-            {
-                varMax = varBetween;
-                thr = t;
-            }
-        }
-
-        // 4) Ratio of "black" pixels (darkness >= threshold)
-        int black = 0;
-        for (int i = 0; i < dark.Length; i++)
-            if (dark[i] >= thr) black++;
-
-        double pct = 100.0 * black / total;
-
-        // 5) Safely clamp the interval
-        if (double.IsNaN(pct) || pct < 0) pct = 0;
-        if (pct > 100) pct = 100;
-        return pct;
     }
 
 
@@ -852,113 +762,6 @@ public static class SheetScoreEngine
     }
 
     // ------------------------ Fill ratio & threshold & groups ------------------------
-    static SKRect ToRect(SKRectI r) => new SKRect(r.Left, r.Top, r.Right, r.Bottom);
-
-    static float FillRatioFromRoi(SKBitmap warpedBgr, SKRectI r, float padFrac, float openFrac)
-    {
-        int x = r.Left, y = r.Top, w = r.Width, h = r.Height;
-        if (w <= 0 || h <= 0) return 0f;
-
-        using var roi = new SKBitmap(w, h, SKColorType.Gray8, SKAlphaType.Opaque);
-        unsafe
-        {
-            for (int j = 0; j < h; j++)
-            {
-                var sp = (uint*)warpedBgr.GetPixels() + (y + j) * warpedBgr.Width + x;
-                var dp = (byte*)roi.GetPixels() + j * roi.RowBytes;
-                for (int i = 0; i < w; i++)
-                {
-                    uint c = sp[i];
-                    byte bb = (byte)(c & 0xFF);
-                    byte gg = (byte)((c >> 8) & 0xFF);
-                    byte rr = (byte)((c >> 16) & 0xFF);
-                    dp[i] = (byte)Math.Clamp((0.299 * rr + 0.587 * gg + 0.114 * bb), 0, 255);
-                }
-            }
-        }
-
-        int pad = Math.Max(1, (int)Math.Round(Math.Min(w, h) * padFrac));
-        SKRectI inner = (w - 2 * pad >= 5 && h - 2 * pad >= 5)
-            ? new SKRectI(pad, pad, w - pad, h - pad)
-            : new SKRectI(0, 0, w, h);
-
-        var hist = new byte[256];
-        int total = inner.Width * inner.Height;
-        unsafe
-        {
-            for (int j = inner.Top; j < inner.Bottom; j++)
-            {
-                var p = (byte*)roi.GetPixels() + j * roi.RowBytes;
-                for (int i = inner.Left; i < inner.Right; i++) hist[p[i]]++;
-            }
-        }
-        byte thr = Otsu(hist, total);
-
-        int k = Math.Max(1, (int)Math.Round(Math.Min(inner.Width, inner.Height) * openFrac));
-        if (k % 2 == 0) k++;
-
-        int ones = 0;
-        unsafe
-        {
-            var tmp = new byte[inner.Width * inner.Height];
-            int idx = 0;
-            for (int j = inner.Top; j < inner.Bottom; j++)
-            {
-                var p = (byte*)roi.GetPixels() + j * roi.RowBytes;
-                for (int i = inner.Left; i < inner.Right; i++)
-                    tmp[idx++] = (byte)(p[i] <= thr ? 1 : 0);
-            }
-            var er = MorphErode(tmp, inner.Width, inner.Height, k);
-            var op = MorphDilate(er, inner.Width, inner.Height, k);
-            for (int t = 0; t < op.Length; t++) ones += op[t];
-        }
-        return (float)ones / (inner.Width * inner.Height);
-    }
-
-    static byte[] MorphErode(byte[] src, int w, int h, int k)
-    {
-        int r = k / 2;
-        var dst = new byte[src.Length];
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                bool ok = true;
-                for (int dy = -r; dy <= r && ok; dy++)
-                {
-                    int yy = y + dy; if (yy < 0 || yy >= h) { ok = false; break; }
-                    int row = yy * w;
-                    for (int dx = -r; dx <= r; dx++)
-                    {
-                        int xx = x + dx; if (xx < 0 || xx >= w) { ok = false; break; }
-                        if (src[row + xx] == 0) { ok = false; break; }
-                    }
-                }
-                dst[y * w + x] = (byte)(ok ? 1 : 0);
-            }
-        return dst;
-    }
-    static byte[] MorphDilate(byte[] src, int w, int h, int k)
-    {
-        int r = k / 2;
-        var dst = new byte[src.Length];
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                bool any = false;
-                for (int dy = -r; dy <= r && !any; dy++)
-                {
-                    int yy = y + dy; if (yy < 0 || yy >= h) continue;
-                    int row = yy * w;
-                    for (int dx = -r; dx <= r; dx++)
-                    {
-                        int xx = x + dx; if (xx < 0 || xx >= w) continue;
-                        if (src[row + xx] != 0) { any = true; break; }
-                    }
-                }
-                dst[y * w + x] = (byte)(any ? 1 : 0);
-            }
-        return dst;
-    }
 
     static float AutoThresholdKMeans(float[] values, float tmin, float tmax, float fallback, float minGap, int iters = 20)
     {
