@@ -1,6 +1,7 @@
 using System.IO;
 using MLScoreSheet.Core;
 using Xunit;
+using System.Text.Json;
 
 public sealed class SheetScoreEngineTests
 {
@@ -37,6 +38,60 @@ public sealed class SheetScoreEngineTests
         Assert.NotNull(result.Overlay);
         Assert.True(result.Overlay.Width > 0);
         Assert.True(result.Overlay.Height > 0);
+    }
+
+    [Fact]
+    public async Task ComputeTotalScoreWithOverlayAsync_ReturnsExpectedOverlayDetails_ForPhoto2()
+    {
+        var photoPath = TestResourceProvider.GetAssetPath("photo.jpeg");
+        using var photoStream = File.OpenRead(photoPath);
+
+        var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
+            photoStream,
+            _resourceProvider,
+            fixedThreshold: 0.30f,
+            overlayVisibilityThreshold: 0.24f);
+
+        var details = result.Details;
+        var expected = LoadOverlayExpectations("photo_overlay_expected.json");
+
+        Assert.Equal(expected.WinnerMap.Length, details.WinnerMap.Length);
+        for (int i = 0; i < details.WinnerMap.Length; i++)
+        {
+            Assert.Equal(expected.WinnerMap[i] == 1, details.WinnerMap[i]);
+        }
+
+        AssertMatrixEqual(expected.RowSums, details.RowSums);
+        AssertMatrixEqual(expected.ColumnSums, details.ColumnSums);
+        Assert.Equal(expected.TableTotals, details.TableTotals);
+    }
+
+    private static OverlayExpectations LoadOverlayExpectations(string fileName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Assets", fileName);
+        var json = File.ReadAllText(path);
+        return JsonSerializer.Deserialize<OverlayExpectations>(json) ?? new OverlayExpectations();
+    }
+
+    private static void AssertMatrixEqual(int[][] expected, int[,] actual)
+    {
+        Assert.Equal(expected.Length, actual.GetLength(0));
+        for (int r = 0; r < expected.Length; r++)
+        {
+            Assert.Equal(expected[r].Length, actual.GetLength(1));
+            for (int c = 0; c < expected[r].Length; c++)
+            {
+                Assert.Equal(expected[r][c], actual[r, c]);
+            }
+        }
+    }
+
+    private sealed class OverlayExpectations
+    {
+        public int[] WinnerMap { get; set; } = Array.Empty<int>();
+        public int[][] RowSums { get; set; } = Array.Empty<int[]>();
+        public int[][] ColumnSums { get; set; } = Array.Empty<int[]>();
+        public int[] TableTotals { get; set; } = Array.Empty<int>();
     }
 
     private sealed class TestResourceProvider : IResourceProvider
