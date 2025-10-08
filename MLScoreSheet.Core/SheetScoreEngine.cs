@@ -6,9 +6,18 @@ public static class SheetScoreEngine
 {
     public sealed class ScoreOverlayResult : IDisposable
     {
+        public sealed class OverlayDetails
+        {
+            public bool[] WinnerMap { get; init; } = Array.Empty<bool>();
+            public int[,] RowSums { get; init; } = new int[0, 0];
+            public int[,] ColumnSums { get; init; } = new int[0, 0];
+            public int[] TableTotals { get; init; } = Array.Empty<int>();
+        }
+
         public int Total { get; init; }
         public float ThresholdUsed { get; init; }
         public SKBitmap Overlay { get; init; } = default!;
+        public OverlayDetails Details { get; init; } = new();
         public void Dispose() => Overlay?.Dispose();
     }
 
@@ -100,7 +109,7 @@ public static class SheetScoreEngine
         var groups = BuildGroupsGrid3x2(tpl.Rects, pList); // internal helper in this file :contentReference[oaicite:2]{index=2}
 
         // overlays (warped + original) with the new coloring logic + labels
-        var overlayWarped = MakeWarpedOverlay(
+        var overlayResult = MakeWarpedOverlay(
             warped,
             tpl.Rects,
             pList,
@@ -115,7 +124,8 @@ public static class SheetScoreEngine
         {
             Total = res.Total,           // <<<< take the number from SumWinnerTakesAll
             ThresholdUsed = thr,
-            Overlay = overlayWarped
+            Overlay = overlayResult.Overlay,
+            Details = overlayResult.Details
         };
 
     }
@@ -862,7 +872,7 @@ public static class SheetScoreEngine
         return groups;
     }
 
-    static SKBitmap MakeWarpedOverlay(
+    static (SKBitmap Overlay, ScoreOverlayResult.OverlayDetails Details) MakeWarpedOverlay(
         SKBitmap warped,
         List<SKRectI> rects,
         float[] pList,
@@ -878,6 +888,12 @@ public static class SheetScoreEngine
                 slotByIndex[groups[gi].Indices[s]] = s;
 
         var winners = new HashSet<int>(winnerIndices);
+        var winnerMap = new bool[rects.Count];
+        foreach (var idx in winnerIndices)
+        {
+            if (idx >= 0 && idx < winnerMap.Length)
+                winnerMap[idx] = true;
+        }
 
         const int tablesPerRowBlock = 2;
         const int rowsPerTable = 5;
@@ -1107,7 +1123,13 @@ public static class SheetScoreEngine
                 }
             }
         }
-        return visWarp;
+        return (visWarp, new ScoreOverlayResult.OverlayDetails
+        {
+            WinnerMap = winnerMap,
+            RowSums = CloneMatrix(rowSums),
+            ColumnSums = CloneMatrix(colSums),
+            TableTotals = (int[])tableTotals.Clone()
+        });
     }
 
 
@@ -1124,4 +1146,13 @@ public static class SheetScoreEngine
     //static SKRect ToRect(SKRectI r) => new SKRect(r.Left, r.Top, r.Right, r.Bottom);
     static void DrawText(SKCanvas canvas, string s, float x, float y, SKPaint paint, SKPaint shadow)
     { canvas.DrawText(s, x + 1, y + 1, shadow); canvas.DrawText(s, x, y, paint); }
+
+    static int[,] CloneMatrix(int[,] source)
+    {
+        int rows = source.GetLength(0);
+        int cols = source.GetLength(1);
+        var clone = new int[rows, cols];
+        Array.Copy(source, clone, source.Length);
+        return clone;
+    }
 }
