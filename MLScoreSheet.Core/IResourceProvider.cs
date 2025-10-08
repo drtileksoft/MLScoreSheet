@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace MLScoreSheet.Core;
 
 public interface IResourceProvider

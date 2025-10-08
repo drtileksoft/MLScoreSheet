@@ -89,7 +89,7 @@ public partial class MainPage : ContentPage
             
             var file = await MediaPicker.PickPhotoAsync(new MediaPickerOptions
             {
-                Title = "Vyber fotku score sheetu"
+                Title = "Pick a photo of the scoresheet"
             });
             if (file == null)
             {
@@ -107,7 +107,7 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", ex.Message, "OK");
+            await DisplayAlert("Error", ex.Message, "OK");
         }
     }
 
@@ -124,7 +124,7 @@ public partial class MainPage : ContentPage
 
             var result = await MediaPicker.CapturePhotoAsync(new MediaPickerOptions
             {
-                Title = "Vyfoť score sheet"
+                Title = "Capture a photo of the score sheet"
             });
             if (result == null)
             {
@@ -142,15 +142,15 @@ public partial class MainPage : ContentPage
         }
         catch (FeatureNotSupportedException)
         {
-            await DisplayAlert("Chyba", "Zařízení nemá podporu pro kameru.", "OK");
+            await DisplayAlert("Error", "Zařízení nemá podporu pro kameru.", "OK");
         }
         catch (PermissionException)
         {
-            await DisplayAlert("Chyba", "Chybí oprávnění ke kameře/úložišti.", "OK");
+            await DisplayAlert("Error", "Chybí oprávnění ke kameře/úložišti.", "OK");
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", ex.Message, "OK");
+            await DisplayAlert("Error", ex.Message, "OK");
         }
 #else
         await DisplayAlert("Info", "Fotit lze jen na Android/iOS.", "OK");
@@ -213,7 +213,7 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", ex.Message, "OK");
+            await DisplayAlert("Error", ex.Message, "OK");
         }
         finally
         {
@@ -232,7 +232,7 @@ public partial class MainPage : ContentPage
         {
             if (!await EnsureSavePermissionAsync())
             {
-                await DisplayAlert("Chyba", "Bez oprávnění nelze uložit do galerie.", "OK");
+                await DisplayAlert("Error", "Bez oprávnění nelze uložit do galerie.", "OK");
                 return;
             }
 
@@ -242,7 +242,7 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Chyba", ex.Message, "OK");
+            await DisplayAlert("Error", ex.Message, "OK");
         }
     }
 
