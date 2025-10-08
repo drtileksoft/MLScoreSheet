@@ -83,6 +83,14 @@ public static class SheetScoreEngine
         var H = ComputeHomography(src, dst);
         var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH); // vracíme v overlay
 
+        var fidWarped = new[]
+        {
+            ApplyHomography(H, src.TL),
+            ApplyHomography(H, src.TR),
+            ApplyHomography(H, src.BR),
+            ApplyHomography(H, src.BL)
+        };
+
         var pList = new float[tpl.Rects.Count];
 
         for (int i = 0; i < tpl.Rects.Count; i++)
@@ -103,6 +111,7 @@ public static class SheetScoreEngine
             pList,
             res.WinnerIndices,
             groups,
+            fidWarped,
             overlayVisibilityThreshold
         );
 
@@ -660,6 +669,16 @@ public static class SheetScoreEngine
         return dst;
     }
 
+    static SKPoint ApplyHomography(float[] H, SKPoint pt)
+    {
+        float denom = H[6] * pt.X + H[7] * pt.Y + 1f;
+        if (Math.Abs(denom) < 1e-6f)
+            denom = denom >= 0 ? 1e-6f : -1e-6f;
+        float x = (H[0] * pt.X + H[1] * pt.Y + H[2]) / denom;
+        float y = (H[3] * pt.X + H[4] * pt.Y + H[5]) / denom;
+        return new SKPoint(x, y);
+    }
+
     // ------------------------ Grayscale / Otsu / CCL ------------------------
     static SKBitmap ToGray(SKBitmap src)
     {
@@ -1051,6 +1070,7 @@ public static class SheetScoreEngine
         float[] pList,
         IList<int> winnerIndices,
         List<Group> groups,
+        IReadOnlyList<SKPoint> fiducialsWarped,
         float visibilityThreshold)
     {
         // Připrav mapu slotu 0..5 pro každý index (kvůli číslici v boxu)
@@ -1088,10 +1108,25 @@ public static class SheetScoreEngine
             var green = new SKPaint { Color = new SKColor(40, 200, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 2f, IsAntialias = true };
             var red = new SKPaint { Color = new SKColor(230, 40, 40), Style = SKPaintStyle.Stroke, StrokeWidth = 2f, IsAntialias = true };
             var blue = new SKPaint { Color = new SKColor(70, 130, 240), Style = SKPaintStyle.Stroke, StrokeWidth = 2.5f, PathEffect = SKPathEffect.CreateDash(new float[] { 6, 6 }, 0), IsAntialias = true };
+            var orangeStroke = new SKPaint { Color = new SKColor(255, 140, 0), Style = SKPaintStyle.Stroke, StrokeWidth = 3f, IsAntialias = true };
+            var orangeFill = new SKPaint { Color = new SKColor(255, 140, 0, 160), Style = SKPaintStyle.Fill, IsAntialias = true };
 
             // texty
             var txt = new SKPaint { Color = SKColors.Blue, TextSize = 30, IsAntialias = true, Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold) };
             var shadow = new SKPaint { Color = new SKColor(0, 0, 0, 180), TextSize = 30, IsAntialias = true, Typeface = txt.Typeface };
+
+            if (fiducialsWarped?.Count > 0)
+            {
+                const float radius = 14f;
+                const float cross = 20f;
+                foreach (var pt in fiducialsWarped)
+                {
+                    c.DrawCircle(pt, radius, orangeFill);
+                    c.DrawCircle(pt, radius, orangeStroke);
+                    c.DrawLine(pt.X - cross, pt.Y, pt.X + cross, pt.Y, orangeStroke);
+                    c.DrawLine(pt.X, pt.Y - cross, pt.X, pt.Y + cross, orangeStroke);
+                }
+            }
 
             // 2.1 rámečky šestic
             for (int gi = 0; gi < groups.Count; gi++)
