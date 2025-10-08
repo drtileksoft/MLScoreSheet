@@ -16,13 +16,13 @@ public static partial class SheetScoreEngine
 
         public int Total { get; init; }
         public float ThresholdUsed { get; init; }
-        public SKBitmap Overlay { get; init; } = default!;
+        public SKBitmap? Overlay { get; init; }
         public OverlayDetails Details { get; init; } = new();
 
         public void Dispose() => Overlay?.Dispose();
     }
 
-    public static async Task<int> ComputeTotalScoreAsync(
+    public static async Task<ScoreOverlayResult> ComputeTotalScoreAsync(
         Stream photoStream,
         IResourceProvider resourceProvider,
         string yoloOnnxLogical = "best.onnx",
@@ -51,7 +51,17 @@ public static partial class SheetScoreEngine
         float thr = autoThreshold ? AutoThresholdKMeans(pList, autoMin, autoMax, fixedThreshold, 0.12f)
                                   : fixedThreshold;
 
-        return TotalScoreFromItems(tpl.Rects, pList, thr);
+        var res = ScoreSelector3x2.SumWinnerTakesAll(tpl.Rects, pList, thr);
+        var groups = BuildGroupsGrid3x2(tpl.Rects, pList);
+        var details = ComputeOverlayDetails(tpl.Rects, res.WinnerIndices, groups);
+
+        return new ScoreOverlayResult
+        {
+            Total = res.Total,
+            ThresholdUsed = thr,
+            Overlay = null,
+            Details = details
+        };
     }
 
     public static async Task<ScoreOverlayResult> ComputeTotalScoreWithOverlayAsync(
@@ -94,23 +104,25 @@ public static partial class SheetScoreEngine
 
         var res = ScoreSelector3x2.SumWinnerTakesAll(tpl.Rects, pList, thr);
         var groups = BuildGroupsGrid3x2(tpl.Rects, pList);
+        var details = ComputeOverlayDetails(tpl.Rects, res.WinnerIndices, groups);
 
-        var overlayResult = MakeWarpedOverlay(
+        var overlay = MakeWarpedOverlay(
             warped,
             tpl.Rects,
             pList,
             res.WinnerIndices,
             groups,
             fidWarped,
-            overlayVisibilityThreshold
+            overlayVisibilityThreshold,
+            details
         );
 
         return new ScoreOverlayResult
         {
             Total = res.Total,
             ThresholdUsed = thr,
-            Overlay = overlayResult.Overlay,
-            Details = overlayResult.Details
+            Overlay = overlay,
+            Details = details
         };
     }
 }

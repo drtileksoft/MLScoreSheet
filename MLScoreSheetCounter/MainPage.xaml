@@ -163,6 +163,15 @@
                        VerticalTextAlignment="Center" />
             </ContentView>
 
+            <ScrollView x:Name="ScoreDetailsScroll"
+                        IsVisible="False"
+                        BackgroundColor="#111"
+                        Padding="16">
+                <Grid x:Name="ScoreDetailsGrid"
+                      RowSpacing="16"
+                      ColumnSpacing="16" />
+            </ScrollView>
+
             <controls:PanPinchContainer x:Name="PreviewContainer"
                                         IsVisible="False"
                                         BackgroundColor="#111"

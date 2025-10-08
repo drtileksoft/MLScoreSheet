@@ -1,5 +1,6 @@
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
 using SkiaSharp;
 using System.Globalization;
 using System.Threading;
@@ -74,6 +75,7 @@ public partial class MainPage : ContentPage
         _lastImagePath = null;
         UpdateSaveButtonState();
         ShowPreview(false);
+        ClearScoreDetailsDisplay();
     }
 
     private void UpdateSaveButtonState()
@@ -93,10 +95,52 @@ public partial class MainPage : ContentPage
                 PreviewContainer.IsVisible = isVisible;
             }
 
-            if (PreviewPlaceholder != null)
+            UpdatePlaceholderVisibility();
+        });
+    }
+
+    private void ShowScoreDetails(bool isVisible)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (ScoreDetailsScroll != null)
             {
-                PreviewPlaceholder.IsVisible = !isVisible;
+                ScoreDetailsScroll.IsVisible = isVisible;
             }
+
+            UpdatePlaceholderVisibility();
+        });
+    }
+
+    private void UpdatePlaceholderVisibility()
+    {
+        if (PreviewPlaceholder == null)
+        {
+            return;
+        }
+
+        bool hasPreview = PreviewContainer?.IsVisible ?? false;
+        bool hasDetails = ScoreDetailsScroll?.IsVisible ?? false;
+        PreviewPlaceholder.IsVisible = !hasPreview && !hasDetails;
+    }
+
+    private void ClearScoreDetailsDisplay()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (ScoreDetailsGrid != null)
+            {
+                ScoreDetailsGrid.Children.Clear();
+                ScoreDetailsGrid.RowDefinitions.Clear();
+                ScoreDetailsGrid.ColumnDefinitions.Clear();
+            }
+
+            if (ScoreDetailsScroll != null)
+            {
+                ScoreDetailsScroll.IsVisible = false;
+            }
+
+            UpdatePlaceholderVisibility();
         });
     }
 
@@ -175,6 +219,173 @@ public partial class MainPage : ContentPage
 #endif
     }
 
+    private void PopulateScoreDetails(ScoreOverlayResult.OverlayDetails details)
+    {
+        const int tablesPerRowBlock = 2;
+        const int totalTables = tablesPerRowBlock * 2;
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (ScoreDetailsGrid == null)
+            {
+                return;
+            }
+
+            ScoreDetailsGrid.Children.Clear();
+            ScoreDetailsGrid.RowDefinitions.Clear();
+            ScoreDetailsGrid.ColumnDefinitions.Clear();
+
+            for (int r = 0; r < 2; r++)
+            {
+                ScoreDetailsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+
+            for (int c = 0; c < tablesPerRowBlock; c++)
+            {
+                ScoreDetailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
+            }
+
+            for (int tableIndex = 0; tableIndex < totalTables; tableIndex++)
+            {
+                var tableView = CreateScoreDetailsView(details, tableIndex);
+                int row = tableIndex / tablesPerRowBlock;
+                int column = tableIndex % tablesPerRowBlock;
+                Grid.SetRow(tableView, row);
+                Grid.SetColumn(tableView, column);
+                ScoreDetailsGrid.Children.Add(tableView);
+            }
+
+            if (ScoreDetailsScroll != null)
+            {
+                ScoreDetailsScroll.IsVisible = true;
+            }
+
+            UpdatePlaceholderVisibility();
+        });
+    }
+
+    private View CreateScoreDetailsView(ScoreOverlayResult.OverlayDetails details, int tableIndex)
+    {
+        const int rowsPerTable = 5;
+        const int columnsPerTable = 3;
+
+        var frame = new Frame
+        {
+            Padding = new Thickness(12),
+            BackgroundColor = Colors.White,
+            BorderColor = Colors.LightGray,
+            CornerRadius = 12,
+            HasShadow = false
+        };
+
+        var grid = new Grid
+        {
+            ColumnSpacing = 6,
+            RowSpacing = 6
+        };
+
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (int c = 0; c < columnsPerTable; c++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
+        }
+
+        void Place(View view, int column, int row, int columnSpan = 1)
+        {
+            Grid.SetColumn(view, column);
+            Grid.SetRow(view, row);
+            if (columnSpan > 1)
+            {
+                Grid.SetColumnSpan(view, columnSpan);
+            }
+
+            grid.Children.Add(view);
+        }
+
+        int currentRow = 0;
+
+        var header = new Label
+        {
+            Text = $"Table {tableIndex + 1}",
+            FontAttributes = FontAttributes.Bold,
+            FontSize = 18,
+            TextColor = Colors.Black
+        };
+        Place(header, 0, currentRow, columnsPerTable + 1);
+        currentRow++;
+
+        for (int r = 0; r < rowsPerTable; r++)
+        {
+            var rowLabel = new Label
+            {
+                Text = $"Row {r + 1}",
+                TextColor = Colors.DarkGray
+            };
+            Place(rowLabel, 0, currentRow);
+
+            var valueLabel = new Label
+            {
+                Text = details.RowSums[tableIndex, r].ToString(CultureInfo.InvariantCulture),
+                FontAttributes = FontAttributes.Bold,
+                HorizontalTextAlignment = TextAlignment.End,
+                TextColor = Colors.Black
+            };
+            Place(valueLabel, 1, currentRow, columnsPerTable);
+            currentRow++;
+        }
+
+        var separator = new BoxView
+        {
+            HeightRequest = 1,
+            BackgroundColor = Colors.LightGray,
+            HorizontalOptions = LayoutOptions.Fill
+        };
+        Place(separator, 0, currentRow, columnsPerTable + 1);
+        currentRow++;
+
+        var columnHeader = new Label
+        {
+            Text = "Column sums",
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.Black
+        };
+        Place(columnHeader, 0, currentRow);
+
+        for (int c = 0; c < columnsPerTable; c++)
+        {
+            var columnValue = new Label
+            {
+                Text = details.ColumnSums[tableIndex, c].ToString(CultureInfo.InvariantCulture),
+                FontAttributes = FontAttributes.Bold,
+                HorizontalTextAlignment = TextAlignment.Center,
+                TextColor = Colors.Black
+            };
+            Place(columnValue, c + 1, currentRow);
+        }
+
+        currentRow++;
+
+        var totalLabel = new Label
+        {
+            Text = "Total",
+            FontAttributes = FontAttributes.Bold,
+            TextColor = Colors.Black
+        };
+        Place(totalLabel, 0, currentRow);
+
+        var totalValue = new Label
+        {
+            Text = details.TableTotals[tableIndex].ToString(CultureInfo.InvariantCulture),
+            FontAttributes = FontAttributes.Bold,
+            HorizontalTextAlignment = TextAlignment.End,
+            TextColor = Colors.Black
+        };
+        Place(totalValue, 1, currentRow, columnsPerTable);
+
+        frame.Content = grid;
+        return frame;
+    }
+
     private async Task RunDetection(string photoPath)
     {
         SetProcessingState(true);
@@ -200,8 +411,9 @@ public partial class MainPage : ContentPage
 
                 ResultLabel.Text = $"TOTAL = {res.Total}";
 
+                var overlayBitmap = res.Overlay ?? throw new InvalidOperationException("Overlay image was not created.");
                 var overlayPath = Path.Combine(FileSystem.Current.CacheDirectory, $"overlay_warped_{Guid.NewGuid():N}.png");
-                using (var img = SKImage.FromBitmap(res.Overlay))
+                using (var img = SKImage.FromBitmap(overlayBitmap))
                 using (var data = img.Encode(SKEncodedImageFormat.Png, 95))
                 using (var fs = File.Create(overlayPath))
                 {
@@ -211,10 +423,11 @@ public partial class MainPage : ContentPage
                 _lastImagePath = overlayPath;
                 Preview.Source = ImageSource.FromFile(overlayPath);
                 ShowPreview(true);
+                ShowScoreDetails(false);
             }
             else
             {
-                var total = await Task.Run(async () =>
+                using var result = await Task.Run(async () =>
                 {
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
@@ -224,10 +437,11 @@ public partial class MainPage : ContentPage
                         autoThreshold: false);
                 });
 
-                ResultLabel.Text = $"TOTAL = {total}";
-                _lastImagePath = photoPath;
-                Preview.Source = ImageSource.FromFile(photoPath);
-                ShowPreview(true);
+                ResultLabel.Text = $"TOTAL = {result.Total}";
+                _lastImagePath = null;
+                Preview.Source = null;
+                ShowPreview(false);
+                PopulateScoreDetails(result.Details);
             }
             UpdateSaveButtonState();
         }
