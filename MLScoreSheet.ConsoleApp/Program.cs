@@ -4,11 +4,11 @@ using SkiaSharp;
 
 try
 {
-    if (args.Length == 0)
-    {
-        PrintUsage();
-        return 1;
-    }
+    //if (args.Length == 0)
+    //{
+    //    PrintUsage();
+    //    return 1;
+    //}
 
     string? inputPath = "photo.jpeg";
     string? outputPath = "output.jpg";
@@ -20,6 +20,9 @@ try
     {
         switch (args[i])
         {
+            case "--input":
+                inputPath = ReadNext(args, ref i);
+                break;
             case "--output":
                 outputPath = ReadNext(args, ref i);
                 break;
@@ -37,14 +40,7 @@ try
                 PrintUsage();
                 return 0;
             default:
-                if (inputPath == null)
-                {
-                    inputPath = args[i];
-                }
-                else
-                {
-                    throw new ArgumentException($"Neznámý argument: {args[i]}");
-                }
+                throw new ArgumentException($"Neznámý argument: {args[i]}");
                 break;
         }
     }
@@ -121,7 +117,6 @@ static float ParseFloat(string value)
 
 static void SaveOverlay(SKBitmap overlay, string outputPath)
 {
-    Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
     using var image = SKImage.FromBitmap(overlay);
     using var data = image.Encode(SKEncodedImageFormat.Png, 95);
     using var fileStream = File.Create(outputPath);
@@ -130,7 +125,7 @@ static void SaveOverlay(SKBitmap overlay, string outputPath)
 
 static void PrintUsage()
 {
-    Console.WriteLine("Použití: mlscoresheet-console <cesta k fotce> [--output <soubor>] [--calc-threshold <hodnota>] [--overlay-threshold <hodnota>] [--auto-threshold]");
+    Console.WriteLine("Použití: mlscoresheet-console [--input <soubor>] [--output <soubor>] [--calc-threshold <hodnota>] [--overlay-threshold <hodnota>] [--auto-threshold]");
 }
 
 internal sealed class FileResourceProvider : IResourceProvider
