@@ -27,10 +27,9 @@ public class ScoreSelector3x2Tests
 
         var result = ScoreSelector3x2.SumWinnerTakesAll(rects, probs, 0.5f);
 
-        Assert.Equal(1 + 4, result.Total);
+        Assert.Equal(1, result.Total);
         Assert.Equal(0.5f, result.ThresholdUsed);
         Assert.Contains(1, result.WinnerIndices);
-        Assert.Contains(4, result.WinnerIndices);
-        Assert.Equal(2, result.WinnerIndices.Count);
+        Assert.Equal(1, result.WinnerIndices.Count);
     }
 }

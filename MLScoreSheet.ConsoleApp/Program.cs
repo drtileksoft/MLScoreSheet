@@ -10,10 +10,10 @@ try
         return 1;
     }
 
-    string? inputPath = null;
-    string? outputPath = null;
-    float? calculationThreshold = null;
-    float? overlayThreshold = null;
+    string? inputPath = "photo.jpeg";
+    string? outputPath = "output.jpg";
+    float? calculationThreshold = 0.3f;
+    float? overlayThreshold = 0.2f;
     bool autoThreshold = false;
 
     for (int i = 0; i < args.Length; i++)
@@ -76,6 +76,7 @@ try
     Console.WriteLine($"Výsledné skóre: {result.Total}");
     Console.WriteLine($"Použitý práh: {result.ThresholdUsed:F2}");
 
+    Console.WriteLine($"Overlay ulkládám do {outputPath}...");
     SaveOverlay(result.Overlay, outputPath);
     Console.WriteLine($"Overlay uložen do: {outputPath}");
     return 0;
