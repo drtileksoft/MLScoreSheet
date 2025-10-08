@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg width="456" height="456" viewBox="0 0 456 456" version="1.1" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="0" width="456" height="456" fill="#512BD4" />
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#071631" />
+      <stop offset="50%" stop-color="#123b7a" />
+      <stop offset="100%" stop-color="#1b61f2" />
+    </linearGradient>
+    <linearGradient id="gridGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.35)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+    </linearGradient>
+    <pattern id="diagonalStripes" patternUnits="userSpaceOnUse" width="32" height="32" patternTransform="rotate(45)">
+      <rect x="0" y="0" width="32" height="32" fill="rgba(255,255,255,0.04)" />
+      <rect x="0" y="0" width="16" height="32" fill="rgba(255,255,255,0.05)" />
+    </pattern>
+  </defs>
+  <rect width="456" height="456" rx="96" fill="url(#bgGradient)" />
+  <rect x="48" y="48" width="360" height="360" rx="80" fill="url(#diagonalStripes)" opacity="0.65" />
+  <rect x="48" y="48" width="360" height="360" rx="80" fill="none" stroke="url(#gridGlow)" stroke-width="4" />
 </svg>
