@@ -34,10 +34,10 @@ public sealed class OnnxYoloFidDetector : IDisposable
 
         public struct Det { public float Cx, Cy, W, H, Conf; }
 
-        /// <summary>Vrátí (cx,cy,w,h,conf) v souřadnicích původní fotky.</summary>
+        /// <summary>Returns (cx, cy, w, h, conf) in the coordinates of the original photo.</summary>
         public List<Det> Detect(SKBitmap photoBgr)
         {
-            // 1) Letterbox → čtverec, normalizace, CHW
+            // 1) Letterbox -> square, normalization, CHW
             var (inputBitmap, gain, padX, padY) = LetterboxToSquare(photoBgr, _imgsz, 114);
             using var input = inputBitmap;
             var tensor = BitmapToTensorCHW01(input);
@@ -74,7 +74,7 @@ public sealed class OnnxYoloFidDetector : IDisposable
 
                     dets.Add(new Det { Cx = cx, Cy = cy, W = w, H = h, Conf = conf });
                 }
-                // export s NMS už je odduplikovaný, ale pro jistotu lehké NMS ještě jednou:
+                // The export with NMS is already deduplicated, but run a light NMS once more just to be sure:
                 return Nms(dets, _iouThr, _maxDet);
             }
 
@@ -108,14 +108,14 @@ public sealed class OnnxYoloFidDetector : IDisposable
                 return Nms(dets, _iouThr, _maxDet);
             }
 
-            // 3C) RAW YOLO výstup (bez NMS): dekóduj + NMS
+            // 3C) RAW YOLO output (without NMS): decode + NMS
             if (TryMapRawOutputs(results, out var raw, out bool chw))
                 return DecodeRawAndNms(raw, chw, gain, padX, padY);
 
-            throw new InvalidOperationException("ONNX výstupy neodpovídají žádnému podporovanému tvaru. Vypiš názvy/rozměry přes DebugListOutputs(session).");
+            throw new InvalidOperationException("The ONNX outputs do not match any supported shape. Print the names/shapes via DebugListOutputs(session).");
         }
 
-        // ---------- Mapovače výstupů ----------
+        // ---------- Output mappers ----------
         private static bool TryMapSingleNms(IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results,
             out DenseTensor<float> single)
         {
@@ -124,7 +124,7 @@ public sealed class OnnxYoloFidDetector : IDisposable
             {
                 if (r.Value is DenseTensor<float> tf)
                 {
-                    var d = tf.Dimensions; // čekáme [1, N, 6]
+                    var d = tf.Dimensions; // expect [1, N, 6]
                     if (d.Length == 3 && d[0] == 1 && d[2] == 6)
                     {
                         single = tf; return true;
@@ -176,7 +176,7 @@ public sealed class OnnxYoloFidDetector : IDisposable
             return false;
         }
 
-        // ---------- Dekódování RAW + NMS ----------
+        // ---------- Raw decoding + NMS ----------
         private List<Det> DecodeRawAndNms(DenseTensor<float> raw, bool chw, float gain, float padX, float padY)
         {
             int K = chw ? raw.Dimensions[1] : raw.Dimensions[2];
@@ -203,7 +203,7 @@ public sealed class OnnxYoloFidDetector : IDisposable
                     int gCount = counts[lvl];
                     if (gCount <= 0) continue;
 
-                    // aproximační grid – není kritický, používá se jen u needDecode
+                    // Approximate grid – not critical, only used when needDecode is true
                     int g = Math.Max(1, (int)Math.Round((float)_imgsz / stride));
 
                     int off = offsets[lvl];
@@ -304,7 +304,7 @@ public sealed class OnnxYoloFidDetector : IDisposable
         // ---------- NMS + IoU ----------
         private static List<Det> Nms(List<Det> dets, float iouThr, int maxDet)
         {
-            // setřídíme ručně (bez LINQ) podle conf
+            // sort manually (without LINQ) by conf
             for (int i = 0; i < dets.Count - 1; i++)
             {
                 int best = i;
@@ -348,12 +348,12 @@ public sealed class OnnxYoloFidDetector : IDisposable
             return union <= 0 ? 0f : inter / union;
         }
 
-        // ---------- Matematické pomocníky ----------
+        // ---------- Math helpers ----------
         private static float Sigmoid(float x) => 1f / (1f + MathF.Exp(-x));
         private static float Prob(float v) => (v < 0f || v > 1f) ? Sigmoid(v) : Math.Clamp(v, 0f, 1f);
         private static bool IsFinite(float x) => !float.IsNaN(x) && !float.IsInfinity(x);
 
-        // ---------- Debug výpis výstupů ----------
+        // ---------- Debug output listing ----------
         public static string DebugListOutputs(InferenceSession session)
         {
             var metadata = session.OutputMetadata.Select(kv => new KeyValuePair<string, IReadOnlyList<int>>(kv.Key, kv.Value.Dimensions));

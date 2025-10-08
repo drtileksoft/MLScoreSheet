@@ -8,13 +8,13 @@ public static class ScoreSelector3x2
         {
             public int Total { get; set; }
             public float ThresholdUsed { get; set; }
-            public List<int> WinnerIndices { get; set; } = new(); // indexy do původního rects/pList
+            public List<int> WinnerIndices { get; set; } = new(); // indices into the original rects/pList
         }
 
         /// <summary>
-        /// Vypočti skóre + vítěze v každé 3×2 šestici (pořadí 0 1 2 / 3 4 5).
-        /// Vstup: rects[i], pList[i] (0..1), thr (0..1).
-        /// Rects nemusejí být dokonale seřazené – řádkování/párování si uděláme sami.
+        /// Computes the score and winner in each 3×2 sextet (order 0 1 2 / 3 4 5).
+        /// Input: rects[i], pList[i] (0..1), thr (0..1).
+        /// Rects do not have to be perfectly ordered—the row grouping/pairing is computed here.
         /// </summary>
         public static Result SumWinnerTakesAll(
             IList<SKRectI> rects, IList<float> pList, float thr)
@@ -22,7 +22,7 @@ public static class ScoreSelector3x2
             if (rects == null || pList == null || rects.Count != pList.Count || rects.Count == 0)
                 return new Result { Total = 0, ThresholdUsed = thr };
 
-            // Připrav pole [cx, cy, x, y, w, h, p, origIndex]
+            // Prepare array [cx, cy, x, y, w, h, p, origIndex]
             var items = new List<float[]>(rects.Count);
             for (int i = 0; i < rects.Count; i++)
             {
@@ -33,14 +33,14 @@ public static class ScoreSelector3x2
             });
             }
 
-            // Seřaď podle cy
+            // Sort by cy
             items.Sort((a, b) => a[1].CompareTo(b[1]));
 
-            // Prah sloučení do řádku: 0.6 * medián výšky
+            // Threshold for merging into a row: 0.6 * median height
             float hMed = Median(items.Select(a => a[5]));
             float rowThresh = MathF.Max(1f, 0.6f * hMed);
 
-            // Seskup podle řádků (scanline)
+            // Group into rows (scanline)
             var rows = new List<List<float[]>>();
             var cur = new List<float[]> { items[0] };
             for (int i = 1; i < items.Count; i++)
@@ -57,7 +57,7 @@ public static class ScoreSelector3x2
             }
             rows.Add(SortByX(cur));
 
-            // Projdi dvojice řádků (horní+spodní), po trojicích sloupců
+            // Iterate over row pairs (top+bottom), in column triplets
             int total = 0;
             var winners = new List<int>();
 
@@ -76,7 +76,7 @@ public static class ScoreSelector3x2
                     // bot trojice: indexy g*3..g*3+2
                     int t0 = g * 3, b0 = g * 3;
 
-                    // posbírat kandidáty nad prahem, s (value, conf, origIndex)
+                    // Collect candidates above the threshold, with (value, conf, origIndex)
                     var cand = new List<(int value, float conf, int origIdx)>(6);
 
                     for (int k = 0; k < 3; k++)
@@ -98,13 +98,13 @@ public static class ScoreSelector3x2
 
                     if (cand.Count > 0)
                     {
-                        // vezmi jen JEDNOHO – s nejvyšším % černé
+                        // Take only ONE—the one with the highest % of black
                         var best = cand[0];
                         for (int i = 1; i < cand.Count; i++)
                             if (cand[i].conf > best.conf) best = cand[i];
 
-                        total += best.value;          // přičti skóre 0..5
-                        winners.Add(best.origIdx);     // pro overlay: jen tenhle bude zelený
+                        total += best.value;          // add the score 0..5
+                        winners.Add(best.origIdx);     // for overlay: only this one will be green
                     }
                 }
             }
