@@ -219,7 +219,7 @@ public partial class MainPage : ContentPage
 #endif
     }
 
-    private void PopulateScoreDetails(ScoreOverlayResult.OverlayDetails details)
+    private void PopulateScoreDetails(MLScoreSheet.Core.SheetScoreEngine.ScoreOverlayResult.OverlayDetails details)
     {
         const int tablesPerRowBlock = 2;
         const int totalTables = tablesPerRowBlock * 2;
@@ -264,11 +264,44 @@ public partial class MainPage : ContentPage
         });
     }
 
-    private View CreateScoreDetailsView(ScoreOverlayResult.OverlayDetails details, int tableIndex)
+    private View CreateScoreDetailsView(MLScoreSheet.Core.SheetScoreEngine.ScoreOverlayResult.OverlayDetails details, int tableIndex)
     {
-        const int rowsPerTable = 5;
-        const int columnsPerTable = 3;
+        // Odvodíme poèet øádkù z 2D pole RowSums: [table, row]
+        int rowsPerTable = details.RowSums.GetLength(1);
 
+        // --- lokální helpery ---
+        static Border Cell(string text,
+                           bool bold = false,
+                           bool end = false,
+                           Color? bg = null,
+                           Color? textColor = null)
+        {
+            return new Border
+            {
+                Stroke = Colors.Transparent,
+                Background = new SolidColorBrush(bg ?? Colors.Transparent),
+                Content = new Label
+                {
+                    Text = text,
+                    FontAttributes = bold ? FontAttributes.Bold : FontAttributes.None,
+                    FontSize = 14,
+                    TextColor = textColor ?? Colors.Black,
+                    VerticalTextAlignment = TextAlignment.Center,
+                    HorizontalTextAlignment = end ? TextAlignment.End : TextAlignment.Start,
+                    Margin = new Thickness(8, 6) // padding buòky
+                }
+            };
+        }
+
+        static void Add(Grid g, View v, int row, int col, int colSpan = 1)
+        {
+            Grid.SetRow(v, row);
+            Grid.SetColumn(v, col);
+            if (colSpan > 1) Grid.SetColumnSpan(v, colSpan);
+            g.Children.Add(v);
+        }
+
+        // --- kontejner ---
         var frame = new Frame
         {
             Padding = new Thickness(12),
@@ -278,113 +311,59 @@ public partial class MainPage : ContentPage
             HasShadow = false
         };
 
+        // 2 sloupce: popisek | hodnota
         var grid = new Grid
         {
-            ColumnSpacing = 6,
-            RowSpacing = 6
+            RowSpacing = 0,
+            ColumnSpacing = 0,
+            ColumnDefinitions =
+        {
+            new ColumnDefinition(GridLength.Star),
+            new ColumnDefinition(GridLength.Auto)
+        }
         };
 
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        for (int c = 0; c < columnsPerTable; c++)
-        {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
-        }
+        // Øádky: caption + (rows) + footer
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); // caption
+        for (int r = 0; r < rowsPerTable; r++)
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); // footer (Total)
 
-        void Place(View view, int column, int row, int columnSpan = 1)
-        {
-            Grid.SetColumn(view, column);
-            Grid.SetRow(view, row);
-            if (columnSpan > 1)
-            {
-                Grid.SetColumnSpan(view, columnSpan);
-            }
+        int row = 0;
 
-            grid.Children.Add(view);
-        }
+        // --- Caption ---
+        Add(grid, Cell($"Table {tableIndex + 1}", bold: true, bg: Colors.Transparent), row, 0, colSpan: 2);
+        row++;
 
-        int currentRow = 0;
-
-        var header = new Label
-        {
-            Text = $"Table {tableIndex + 1}",
-            FontAttributes = FontAttributes.Bold,
-            FontSize = 18,
-            TextColor = Colors.Black
-        };
-        Place(header, 0, currentRow, columnsPerTable + 1);
-        currentRow++;
-
+        // --- Øádky se souèty ---
         for (int r = 0; r < rowsPerTable; r++)
         {
-            var rowLabel = new Label
-            {
-                Text = $"Row {r + 1}",
-                TextColor = Colors.DarkGray
-            };
-            Place(rowLabel, 0, currentRow);
+            Add(grid, Cell($"Row {r + 1}", textColor: Colors.DarkGray), row, 0);
 
-            var valueLabel = new Label
+            var rowSum = details.RowSums[tableIndex, r].ToString(CultureInfo.InvariantCulture);
+            Add(grid, Cell(rowSum, bold: true, end: true), row, 1);
+
+            // slabá oddìlovací linka pod každým øádkem (kromì posledního pøed footrem)
+            if (r < rowsPerTable - 1)
             {
-                Text = details.RowSums[tableIndex, r].ToString(CultureInfo.InvariantCulture),
-                FontAttributes = FontAttributes.Bold,
-                HorizontalTextAlignment = TextAlignment.End,
-                TextColor = Colors.Black
-            };
-            Place(valueLabel, 1, currentRow, columnsPerTable);
-            currentRow++;
+                row++;
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                Add(grid, new BoxView { HeightRequest = 1, BackgroundColor = Colors.LightGray }, row, 0, colSpan: 2);
+            }
+
+            row++;
         }
 
-        var separator = new BoxView
-        {
-            HeightRequest = 1,
-            BackgroundColor = Colors.LightGray,
-            HorizontalOptions = LayoutOptions.Fill
-        };
-        Place(separator, 0, currentRow, columnsPerTable + 1);
-        currentRow++;
-
-        var columnHeader = new Label
-        {
-            Text = "Column sums",
-            FontAttributes = FontAttributes.Bold,
-            TextColor = Colors.Black
-        };
-        Place(columnHeader, 0, currentRow);
-
-        for (int c = 0; c < columnsPerTable; c++)
-        {
-            var columnValue = new Label
-            {
-                Text = details.ColumnSums[tableIndex, c].ToString(CultureInfo.InvariantCulture),
-                FontAttributes = FontAttributes.Bold,
-                HorizontalTextAlignment = TextAlignment.Center,
-                TextColor = Colors.Black
-            };
-            Place(columnValue, c + 1, currentRow);
-        }
-
-        currentRow++;
-
-        var totalLabel = new Label
-        {
-            Text = "Total",
-            FontAttributes = FontAttributes.Bold,
-            TextColor = Colors.Black
-        };
-        Place(totalLabel, 0, currentRow);
-
-        var totalValue = new Label
-        {
-            Text = details.TableTotals[tableIndex].ToString(CultureInfo.InvariantCulture),
-            FontAttributes = FontAttributes.Bold,
-            HorizontalTextAlignment = TextAlignment.End,
-            TextColor = Colors.Black
-        };
-        Place(totalValue, 1, currentRow, columnsPerTable);
+        // --- Footer s Total ---
+        var footerBg = Color.FromArgb("#F0F2F5");
+        Add(grid, Cell("Total", bold: true, bg: footerBg), row, 0);
+        var total = details.TableTotals[tableIndex].ToString(CultureInfo.InvariantCulture);
+        Add(grid, Cell(total, bold: true, end: true, bg: footerBg), row, 1);
 
         frame.Content = grid;
         return frame;
     }
+
 
     private async Task RunDetection(string photoPath)
     {
