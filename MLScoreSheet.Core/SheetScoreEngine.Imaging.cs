@@ -48,14 +48,17 @@ public static partial class SheetScoreEngine
             canvas.DrawBitmap(src, roiRect, new SKRect(0, 0, roiRect.Width, roiRect.Height));
 
         using var pixmap = new SKPixmap(roi.Info, roi.GetPixels(out _));
+        int total = roi.Width * roi.Height;
+
         Span<int> hist = stackalloc int[256];
         hist.Clear();
-        int total = roi.Width * roi.Height;
+        var darknessValues = total > 0 ? new byte[total] : Array.Empty<byte>();
 
         unsafe
         {
             byte* basePtr = (byte*)pixmap.GetPixels();
             int bpp = pixmap.Info.BytesPerPixel;
+            int idx = 0;
             for (int y = 0; y < roi.Height; y++)
             {
                 byte* row = basePtr + y * pixmap.RowBytes;
@@ -65,7 +68,8 @@ public static partial class SheetScoreEngine
                     byte G = row[x * bpp + 1];
                     byte R = row[x * bpp + 2];
                     int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int darkness = 255 - luminance;
+                    byte darkness = (byte)(255 - luminance);
+                    darknessValues[idx++] = darkness;
                     hist[darkness]++;
                 }
             }
@@ -83,55 +87,20 @@ public static partial class SheetScoreEngine
         Span<int> normalizedHist = stackalloc int[256];
         normalizedHist.Clear();
 
-        unsafe
+        foreach (var darkness in darknessValues)
         {
-            byte* basePtr = (byte*)pixmap.GetPixels();
-            int bpp = pixmap.Info.BytesPerPixel;
-            for (int y = 0; y < roi.Height; y++)
-            {
-                byte* row = basePtr + y * pixmap.RowBytes;
-                for (int x = 0; x < roi.Width; x++)
-                {
-                    byte B = row[x * bpp + 0];
-                    byte G = row[x * bpp + 1];
-                    byte R = row[x * bpp + 2];
-                    int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int darkness = 255 - luminance;
-                    double normalized = (darkness - pLo) / range;
-                    if (normalized < 0) normalized = 0;
-                    else if (normalized > 1) normalized = 1;
-                    int bucket = (int)Math.Round(normalized * 255.0);
-                    normalizedHist[bucket]++;
-                }
-            }
+            double normalized = (darkness - pLo) / range;
+            if (normalized < 0) normalized = 0;
+            else if (normalized > 1) normalized = 1;
+            int bucket = (int)Math.Round(normalized * 255.0);
+            normalizedHist[bucket]++;
         }
 
         int threshold = OtsuThreshold(normalizedHist, total);
 
         int blackPixels = 0;
-        unsafe
-        {
-            byte* basePtr = (byte*)pixmap.GetPixels();
-            int bpp = pixmap.Info.BytesPerPixel;
-            for (int y = 0; y < roi.Height; y++)
-            {
-                byte* row = basePtr + y * pixmap.RowBytes;
-                for (int x = 0; x < roi.Width; x++)
-                {
-                    byte B = row[x * bpp + 0];
-                    byte G = row[x * bpp + 1];
-                    byte R = row[x * bpp + 2];
-                    int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int darkness = 255 - luminance;
-                    double normalized = (darkness - pLo) / range;
-                    if (normalized < 0) normalized = 0;
-                    else if (normalized > 1) normalized = 1;
-                    int bucket = (int)Math.Round(normalized * 255.0);
-                    if (bucket >= threshold)
-                        blackPixels++;
-                }
-            }
-        }
+        for (int bucket = threshold; bucket < 256; bucket++)
+            blackPixels += normalizedHist[bucket];
 
         double percentage = 100.0 * blackPixels / Math.Max(1, total);
         if (double.IsNaN(percentage)) percentage = 0;
