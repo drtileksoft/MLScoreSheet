@@ -14,12 +14,14 @@ public sealed class SheetScoreEngineTests
         var photoPath = TestResourceProvider.GetAssetPath("photo.jpeg");
         using var photoStream = File.OpenRead(photoPath);
 
-        var total = await SheetScoreEngine.ComputeTotalScoreAsync(
+        using var result = await SheetScoreEngine.ComputeTotalScoreAsync(
             photoStream,
             _resourceProvider,
             fixedThreshold: 0.30f);
 
-        Assert.Equal(43, total);
+        Assert.Equal(43, result.Total);
+        Assert.Null(result.Overlay);
+        Assert.NotNull(result.Details);
     }
 
     [Fact]
@@ -28,7 +30,7 @@ public sealed class SheetScoreEngineTests
         var photoPath = TestResourceProvider.GetAssetPath("photo.jpeg");
         using var photoStream = File.OpenRead(photoPath);
 
-        var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
+        using var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
             photoStream,
             _resourceProvider,
             fixedThreshold: 0.30f,
@@ -37,8 +39,8 @@ public sealed class SheetScoreEngineTests
         Assert.Equal(43, result.Total);
         Assert.Equal(0.30f, result.ThresholdUsed, precision: 3);
         Assert.NotNull(result.Overlay);
-        Assert.True(result.Overlay.Width > 0);
-        Assert.True(result.Overlay.Height > 0);
+        Assert.True(result.Overlay!.Width > 0);
+        Assert.True(result.Overlay!.Height > 0);
     }
 
     [Fact]
@@ -47,7 +49,7 @@ public sealed class SheetScoreEngineTests
         var photoPath = TestResourceProvider.GetAssetPath("photo2.jpeg");
         using var photoStream = File.OpenRead(photoPath);
 
-        var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
+        using var result = await SheetScoreEngine.ComputeTotalScoreWithOverlayAsync(
             photoStream,
             _resourceProvider,
             fixedThreshold: 0.25f,

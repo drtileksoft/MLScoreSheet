@@ -1,5 +1,6 @@
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
 using SkiaSharp;
 using System.Globalization;
 using System.Threading;
@@ -74,6 +75,7 @@ public partial class MainPage : ContentPage
         _lastImagePath = null;
         UpdateSaveButtonState();
         ShowPreview(false);
+        ClearScoreDetailsDisplay();
     }
 
     private void UpdateSaveButtonState()
@@ -93,10 +95,52 @@ public partial class MainPage : ContentPage
                 PreviewContainer.IsVisible = isVisible;
             }
 
-            if (PreviewPlaceholder != null)
+            UpdatePlaceholderVisibility();
+        });
+    }
+
+    private void ShowScoreDetails(bool isVisible)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (ScoreDetailsScroll != null)
             {
-                PreviewPlaceholder.IsVisible = !isVisible;
+                ScoreDetailsScroll.IsVisible = isVisible;
             }
+
+            UpdatePlaceholderVisibility();
+        });
+    }
+
+    private void UpdatePlaceholderVisibility()
+    {
+        if (PreviewPlaceholder == null)
+        {
+            return;
+        }
+
+        bool hasPreview = PreviewContainer?.IsVisible ?? false;
+        bool hasDetails = ScoreDetailsScroll?.IsVisible ?? false;
+        PreviewPlaceholder.IsVisible = !hasPreview && !hasDetails;
+    }
+
+    private void ClearScoreDetailsDisplay()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (ScoreDetailsGrid != null)
+            {
+                ScoreDetailsGrid.Children.Clear();
+                ScoreDetailsGrid.RowDefinitions.Clear();
+                ScoreDetailsGrid.ColumnDefinitions.Clear();
+            }
+
+            if (ScoreDetailsScroll != null)
+            {
+                ScoreDetailsScroll.IsVisible = false;
+            }
+
+            UpdatePlaceholderVisibility();
         });
     }
 
@@ -175,6 +219,152 @@ public partial class MainPage : ContentPage
 #endif
     }
 
+    private void PopulateScoreDetails(MLScoreSheet.Core.SheetScoreEngine.ScoreOverlayResult.OverlayDetails details)
+    {
+        const int tablesPerRowBlock = 2;
+        const int totalTables = tablesPerRowBlock * 2;
+
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (ScoreDetailsGrid == null)
+            {
+                return;
+            }
+
+            ScoreDetailsGrid.Children.Clear();
+            ScoreDetailsGrid.RowDefinitions.Clear();
+            ScoreDetailsGrid.ColumnDefinitions.Clear();
+
+            for (int r = 0; r < 2; r++)
+            {
+                ScoreDetailsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+
+            for (int c = 0; c < tablesPerRowBlock; c++)
+            {
+                ScoreDetailsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Star });
+            }
+
+            for (int tableIndex = 0; tableIndex < totalTables; tableIndex++)
+            {
+                var tableView = CreateScoreDetailsView(details, tableIndex);
+                int row = tableIndex / tablesPerRowBlock;
+                int column = tableIndex % tablesPerRowBlock;
+                Grid.SetRow(tableView, row);
+                Grid.SetColumn(tableView, column);
+                ScoreDetailsGrid.Children.Add(tableView);
+            }
+
+            if (ScoreDetailsScroll != null)
+            {
+                ScoreDetailsScroll.IsVisible = true;
+            }
+
+            UpdatePlaceholderVisibility();
+        });
+    }
+
+    private View CreateScoreDetailsView(MLScoreSheet.Core.SheetScoreEngine.ScoreOverlayResult.OverlayDetails details, int tableIndex)
+    {
+        // OdvodÌme poËet ¯·dk˘ z 2D pole RowSums: [table, row]
+        int rowsPerTable = details.RowSums.GetLength(1);
+
+        // --- lok·lnÌ helpery ---
+        static Border Cell(string text,
+                           bool bold = false,
+                           bool end = false,
+                           Color? bg = null,
+                           Color? textColor = null)
+        {
+            return new Border
+            {
+                Stroke = Colors.Transparent,
+                Background = new SolidColorBrush(bg ?? Colors.Transparent),
+                Content = new Label
+                {
+                    Text = text,
+                    FontAttributes = bold ? FontAttributes.Bold : FontAttributes.None,
+                    FontSize = 14,
+                    TextColor = textColor ?? Colors.Black,
+                    VerticalTextAlignment = TextAlignment.Center,
+                    HorizontalTextAlignment = end ? TextAlignment.End : TextAlignment.Start,
+                    Margin = new Thickness(8, 6) // padding buÚky
+                }
+            };
+        }
+
+        static void Add(Grid g, View v, int row, int col, int colSpan = 1)
+        {
+            Grid.SetRow(v, row);
+            Grid.SetColumn(v, col);
+            if (colSpan > 1) Grid.SetColumnSpan(v, colSpan);
+            g.Children.Add(v);
+        }
+
+        // --- kontejner ---
+        var frame = new Frame
+        {
+            Padding = new Thickness(12),
+            BackgroundColor = Colors.White,
+            BorderColor = Colors.LightGray,
+            CornerRadius = 12,
+            HasShadow = false
+        };
+
+        // 2 sloupce: popisek | hodnota
+        var grid = new Grid
+        {
+            RowSpacing = 0,
+            ColumnSpacing = 0,
+            ColumnDefinitions =
+        {
+            new ColumnDefinition(GridLength.Star),
+            new ColumnDefinition(GridLength.Auto)
+        }
+        };
+
+        // ÿ·dky: caption + (rows) + footer
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); // caption
+        for (int r = 0; r < rowsPerTable; r++)
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto)); // footer (Total)
+
+        int row = 0;
+
+        // --- Caption ---
+        Add(grid, Cell($"Table {tableIndex + 1}", bold: true, bg: Colors.Transparent), row, 0, colSpan: 2);
+        row++;
+
+        // --- ÿ·dky se souËty ---
+        for (int r = 0; r < rowsPerTable; r++)
+        {
+            Add(grid, Cell($"Row {r + 1}", textColor: Colors.DarkGray), row, 0);
+
+            var rowSum = details.RowSums[tableIndex, r].ToString(CultureInfo.InvariantCulture);
+            Add(grid, Cell(rowSum, bold: true, end: true), row, 1);
+
+            // slab· oddÏlovacÌ linka pod kaûd˝m ¯·dkem (kromÏ poslednÌho p¯ed footrem)
+            if (r < rowsPerTable - 1)
+            {
+                row++;
+                grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+                Add(grid, new BoxView { HeightRequest = 1, BackgroundColor = Colors.LightGray }, row, 0, colSpan: 2);
+            }
+
+            row++;
+        }
+
+        // --- Footer s Total ---
+        var footerBg = Color.FromArgb("#F0F2F5");
+        Add(grid, Cell("Total", bold: true, bg: footerBg), row, 0);
+        var total = details.TableTotals[tableIndex].ToString(CultureInfo.InvariantCulture);
+        Add(grid, Cell(total, bold: true, end: true, bg: footerBg), row, 1);
+
+        frame.Content = grid;
+        return frame;
+    }
+
+
     private async Task RunDetection(string photoPath)
     {
         SetProcessingState(true);
@@ -200,8 +390,9 @@ public partial class MainPage : ContentPage
 
                 ResultLabel.Text = $"TOTAL = {res.Total}";
 
+                var overlayBitmap = res.Overlay ?? throw new InvalidOperationException("Overlay image was not created.");
                 var overlayPath = Path.Combine(FileSystem.Current.CacheDirectory, $"overlay_warped_{Guid.NewGuid():N}.png");
-                using (var img = SKImage.FromBitmap(res.Overlay))
+                using (var img = SKImage.FromBitmap(overlayBitmap))
                 using (var data = img.Encode(SKEncodedImageFormat.Png, 95))
                 using (var fs = File.Create(overlayPath))
                 {
@@ -211,10 +402,11 @@ public partial class MainPage : ContentPage
                 _lastImagePath = overlayPath;
                 Preview.Source = ImageSource.FromFile(overlayPath);
                 ShowPreview(true);
+                ShowScoreDetails(false);
             }
             else
             {
-                var total = await Task.Run(async () =>
+                using var result = await Task.Run(async () =>
                 {
                     using var photo = File.OpenRead(photoPath);
                     return await SheetScoreEngine.ComputeTotalScoreAsync(
@@ -224,10 +416,11 @@ public partial class MainPage : ContentPage
                         autoThreshold: false);
                 });
 
-                ResultLabel.Text = $"TOTAL = {total}";
-                _lastImagePath = photoPath;
-                Preview.Source = ImageSource.FromFile(photoPath);
-                ShowPreview(true);
+                ResultLabel.Text = $"TOTAL = {result.Total}";
+                _lastImagePath = null;
+                Preview.Source = null;
+                ShowPreview(false);
+                PopulateScoreDetails(result.Details);
             }
             UpdateSaveButtonState();
         }

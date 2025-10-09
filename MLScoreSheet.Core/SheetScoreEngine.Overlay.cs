@@ -4,19 +4,18 @@ namespace MLScoreSheet.Core;
 
 public static partial class SheetScoreEngine
 {
-    private static (SKBitmap Overlay, ScoreOverlayResult.OverlayDetails Details) MakeWarpedOverlay(
-        SKBitmap warped,
+    private const int TablesPerRowBlock = 2;
+    private const int RowsPerTable = 5;
+    private const int ColumnsPerTable = 3;
+    private const int TotalTables = TablesPerRowBlock * 2;
+    private const int GroupsPerRowPair = ColumnsPerTable * TablesPerRowBlock;
+
+    private static ScoreOverlayResult.OverlayDetails ComputeOverlayDetails(
         List<SKRectI> rects,
-        float[] pList,
         IList<int> winnerIndices,
-        List<Group> groups,
-        IReadOnlyList<SKPoint> fiducialsWarped,
-        float visibilityThreshold)
+        List<Group> groups)
     {
-        var slotByIndex = Enumerable.Repeat(-1, rects.Count).ToArray();
-        for (int gi = 0; gi < groups.Count; gi++)
-            for (int s = 0; s < 6; s++)
-                slotByIndex[groups[gi].Indices[s]] = s;
+        var slotByIndex = CreateSlotIndexMap(rects.Count, groups);
 
         var winners = new HashSet<int>(winnerIndices);
         var winnerMap = new bool[rects.Count];
@@ -26,22 +25,100 @@ public static partial class SheetScoreEngine
                 winnerMap[idx] = true;
         }
 
-        const int tablesPerRowBlock = 2;
-        const int rowsPerTable = 5;
-        const int colsPerTable = 3;
-        const int totalTables = tablesPerRowBlock * 2;
-        const int groupsPerRowPair = colsPerTable * tablesPerRowBlock;
+        var rowSums = new int[TotalTables, RowsPerTable];
+        var colSums = new int[TotalTables, ColumnsPerTable];
+        var tableTotals = new int[TotalTables];
 
-        var rowSums = new int[totalTables, rowsPerTable];
-        var colSums = new int[totalTables, colsPerTable];
-        var tableTotals = new int[totalTables];
+        for (int gi = 0; gi < groups.Count; gi++)
+        {
+            var g = groups[gi];
 
-        var rowBounds = new SKRect[totalTables, rowsPerTable];
-        var colBounds = new SKRect[totalTables, colsPerTable];
-        var tableBounds = new SKRect[totalTables];
-        var rowHas = new bool[totalTables, rowsPerTable];
-        var colHas = new bool[totalTables, colsPerTable];
-        var tableHas = new bool[totalTables];
+            int rowPairIndex = gi / GroupsPerRowPair;
+            int posInPair = gi % GroupsPerRowPair;
+
+            int tableRowBlock = rowPairIndex / RowsPerTable;
+            int rowInTable = rowPairIndex % RowsPerTable;
+            int tableColBlock = posInPair / ColumnsPerTable;
+            int colInTable = posInPair % ColumnsPerTable;
+
+            if (tableRowBlock >= 2 || tableColBlock >= TablesPerRowBlock)
+                continue;
+
+            int tableIndex = tableRowBlock * TablesPerRowBlock + tableColBlock;
+            if (tableIndex < 0 || tableIndex >= TotalTables)
+                continue;
+
+            bool hasWinner = false;
+            int groupScore = 0;
+            for (int s = 0; s < g.Indices.Length; s++)
+            {
+                int idx = g.Indices[s];
+                if (idx < 0 || idx >= winnerMap.Length)
+                    continue;
+
+                if (winners.Contains(idx))
+                {
+                    hasWinner = true;
+                    int slot = slotByIndex[idx];
+                    if (slot >= 0)
+                        groupScore = g.ValueOf(slot);
+                    break;
+                }
+            }
+
+            if (!hasWinner)
+                continue;
+
+            rowSums[tableIndex, rowInTable] += groupScore;
+            colSums[tableIndex, colInTable] += groupScore;
+            tableTotals[tableIndex] += groupScore;
+        }
+
+        return new ScoreOverlayResult.OverlayDetails
+        {
+            WinnerMap = winnerMap,
+            RowSums = rowSums,
+            ColumnSums = colSums,
+            TableTotals = tableTotals
+        };
+    }
+
+    private static int[] CreateSlotIndexMap(int rectCount, List<Group> groups)
+    {
+        var slotByIndex = Enumerable.Repeat(-1, rectCount).ToArray();
+        for (int gi = 0; gi < groups.Count; gi++)
+        {
+            var g = groups[gi];
+            for (int s = 0; s < g.Indices.Length; s++)
+            {
+                int idx = g.Indices[s];
+                if (idx >= 0 && idx < slotByIndex.Length)
+                    slotByIndex[idx] = s;
+            }
+        }
+
+        return slotByIndex;
+    }
+
+    private static SKBitmap MakeWarpedOverlay(
+        SKBitmap warped,
+        List<SKRectI> rects,
+        float[] pList,
+        IList<int> winnerIndices,
+        List<Group> groups,
+        IReadOnlyList<SKPoint> fiducialsWarped,
+        float visibilityThreshold,
+        ScoreOverlayResult.OverlayDetails details)
+    {
+        var slotByIndex = CreateSlotIndexMap(rects.Count, groups);
+        var winners = new HashSet<int>(winnerIndices);
+
+        var rowBounds = new SKRect[TotalTables, RowsPerTable];
+        var colBounds = new SKRect[TotalTables, ColumnsPerTable];
+        var tableBounds = new SKRect[TotalTables];
+        var rowHas = new bool[TotalTables, RowsPerTable];
+        var colHas = new bool[TotalTables, ColumnsPerTable];
+        var tableHas = new bool[TotalTables];
 
         var groupWidths = new List<float>();
         var groupHeights = new List<float>();
@@ -83,21 +160,21 @@ public static partial class SheetScoreEngine
                 var groupRect = new SKRect(minX - pad, minY - pad, maxX + pad, maxY + pad);
                 c.DrawRect(groupRect, blue);
 
-                if (groupsPerRowPair <= 0) continue;
+                if (GroupsPerRowPair <= 0) continue;
 
-                int rowPairIndex = gi / groupsPerRowPair;
-                int posInPair = gi % groupsPerRowPair;
+                int rowPairIndex = gi / GroupsPerRowPair;
+                int posInPair = gi % GroupsPerRowPair;
 
-                int tableRowBlock = rowPairIndex / rowsPerTable;
-                int rowInTable = rowPairIndex % rowsPerTable;
-                int tableColBlock = posInPair / colsPerTable;
-                int colInTable = posInPair % colsPerTable;
+                int tableRowBlock = rowPairIndex / RowsPerTable;
+                int rowInTable = rowPairIndex % RowsPerTable;
+                int tableColBlock = posInPair / ColumnsPerTable;
+                int colInTable = posInPair % ColumnsPerTable;
 
-                if (tableRowBlock >= 2 || tableColBlock >= tablesPerRowBlock)
+                if (tableRowBlock >= 2 || tableColBlock >= TablesPerRowBlock)
                     continue;
 
-                int tableIndex = tableRowBlock * tablesPerRowBlock + tableColBlock;
-                if (tableIndex < 0 || tableIndex >= totalTables)
+                int tableIndex = tableRowBlock * TablesPerRowBlock + tableColBlock;
+                if (tableIndex < 0 || tableIndex >= TotalTables)
                     continue;
 
                 groupWidths.Add(groupRect.Width);
@@ -126,28 +203,6 @@ public static partial class SheetScoreEngine
                 }
                 else
                     tableBounds[tableIndex] = SKRect.Union(tableBounds[tableIndex], groupRect);
-
-                bool hasWinner = false;
-                int groupScore = 0;
-                for (int s = 0; s < g.Indices.Length; s++)
-                {
-                    int idx = g.Indices[s];
-                    if (winners.Contains(idx))
-                    {
-                        hasWinner = true;
-                        int slot = slotByIndex[idx];
-                        if (slot >= 0)
-                            groupScore = g.ValueOf(slot);
-                        break;
-                    }
-                }
-
-                if (hasWinner)
-                {
-                    rowSums[tableIndex, rowInTable] += groupScore;
-                    colSums[tableIndex, colInTable] += groupScore;
-                    tableTotals[tableIndex] += groupScore;
-                }
             }
 
             for (int i = 0; i < rects.Count; i++)
@@ -211,17 +266,17 @@ public static partial class SheetScoreEngine
                     Typeface = txt.Typeface
                 };
 
-                for (int table = 0; table < totalTables; table++)
+                for (int table = 0; table < TotalTables; table++)
                 {
                     if (!tableHas[table])
                         continue;
 
-                    for (int r = 0; r < rowsPerTable; r++)
+                    for (int r = 0; r < RowsPerTable; r++)
                     {
                         if (!rowHas[table, r])
                             continue;
 
-                        int value = rowSums[table, r];
+                        int value = details.RowSums[table, r];
                         string text = value.ToString();
                         var bounds = rowBounds[table, r];
                         float x = bounds.Right + rowOffset;
@@ -229,12 +284,12 @@ public static partial class SheetScoreEngine
                         DrawText(c, text, x, y, sumPaint, sumShadow);
                     }
 
-                    for (int col = 0; col < colsPerTable; col++)
+                    for (int col = 0; col < ColumnsPerTable; col++)
                     {
                         if (!colHas[table, col])
                             continue;
 
-                        int value = colSums[table, col];
+                        int value = details.ColumnSums[table, col];
                         string text = value.ToString();
                         var bounds = colBounds[table, col];
                         float textWidth = sumPaint.MeasureText(text);
@@ -243,7 +298,7 @@ public static partial class SheetScoreEngine
                         DrawText(c, text, x, y, sumPaint, sumShadow);
                     }
 
-                    int total = tableTotals[table];
+                    int total = details.TableTotals[table];
                     string totalText = total.ToString();
                     float totalX = tableBounds[table].Right + rowOffset;
                     float totalY = tableBounds[table].Bottom + colOffset + totalPaint.TextSize * 0.35f;
@@ -252,27 +307,12 @@ public static partial class SheetScoreEngine
             }
         }
 
-        return (visWarp, new ScoreOverlayResult.OverlayDetails
-        {
-            WinnerMap = winnerMap,
-            RowSums = CloneMatrix(rowSums),
-            ColumnSums = CloneMatrix(colSums),
-            TableTotals = (int[])tableTotals.Clone()
-        });
+        return visWarp;
     }
 
     private static void DrawText(SKCanvas canvas, string s, float x, float y, SKPaint paint, SKPaint shadow)
     {
         canvas.DrawText(s, x + 1, y + 1, shadow);
         canvas.DrawText(s, x, y, paint);
-    }
-
-    private static int[,] CloneMatrix(int[,] source)
-    {
-        int rows = source.GetLength(0);
-        int cols = source.GetLength(1);
-        var clone = new int[rows, cols];
-        Array.Copy(source, clone, source.Length);
-        return clone;
     }
 }
