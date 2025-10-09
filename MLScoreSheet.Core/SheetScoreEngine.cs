@@ -44,10 +44,9 @@ public static partial class SheetScoreEngine
         var H = ComputeHomography(src, dst);
         using var warped = WarpToTemplate(photo, H, tpl.SizeW, tpl.SizeH);
 
-        var localContrastCalibration = new LocalContrastCalibration();
         var pList = new float[tpl.Rects.Count];
         for (int i = 0; i < tpl.Rects.Count; i++)
-            pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i], localContrastCalibration) / 100.0);
+            pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i]) / 100.0);
 
         float thr = autoThreshold ? AutoThresholdKMeans(pList, autoMin, autoMax, fixedThreshold, 0.12f)
                                   : fixedThreshold;
@@ -96,10 +95,9 @@ public static partial class SheetScoreEngine
             ApplyHomography(H, src.BL)
         };
 
-        var localContrastCalibration = new LocalContrastCalibration();
         var pList = new float[tpl.Rects.Count];
         for (int i = 0; i < tpl.Rects.Count; i++)
-            pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i], localContrastCalibration) / 100.0);
+            pList[i] = (float)(GetFillPercentLocalContrast(warped, tpl.Rects[i]) / 100.0);
 
         float thr = autoThreshold ? AutoThresholdKMeans(pList, autoMin, autoMax, fixedThreshold, 0.12f)
                                   : fixedThreshold;
