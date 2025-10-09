@@ -1,3 +1,4 @@
+using System.Buffers;
 using SkiaSharp;
 
 namespace MLScoreSheet.Core;
@@ -23,7 +24,7 @@ public static partial class SheetScoreEngine
         return rotated;
     }
 
-    private static double GetFillPercentLocalContrast(SKBitmap src, SKRectI rect)
+    private static double GetFillPercentLocalContrast(SKBitmap src, SKRectI rect, LocalContrastCalibration? calibration = null)
     {
         const int margin = 3;
         var expanded = new SKRectI(
@@ -48,143 +49,194 @@ public static partial class SheetScoreEngine
             canvas.DrawBitmap(src, roiRect, new SKRect(0, 0, roiRect.Width, roiRect.Height));
 
         using var pixmap = new SKPixmap(roi.Info, roi.GetPixels(out _));
+        int total = roi.Width * roi.Height;
+        if (total <= 0)
+            return 0;
+
+        var darknessBuffer = ArrayPool<int>.Shared.Rent(total);
+
         Span<int> hist = stackalloc int[256];
         hist.Clear();
-        int total = roi.Width * roi.Height;
+        int index = 0;
 
-        unsafe
+        try
         {
-            byte* basePtr = (byte*)pixmap.GetPixels();
-            int bpp = pixmap.Info.BytesPerPixel;
-            for (int y = 0; y < roi.Height; y++)
+            unsafe
             {
-                byte* row = basePtr + y * pixmap.RowBytes;
-                for (int x = 0; x < roi.Width; x++)
+                byte* basePtr = (byte*)pixmap.GetPixels();
+                int bpp = pixmap.Info.BytesPerPixel;
+                for (int y = 0; y < roi.Height; y++)
                 {
-                    byte B = row[x * bpp + 0];
-                    byte G = row[x * bpp + 1];
-                    byte R = row[x * bpp + 2];
-                    int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int darkness = 255 - luminance;
-                    hist[darkness]++;
-                }
-            }
-        }
-
-        int pLo = PercentileFromHist(hist, total, 0.05);
-        int pHi = PercentileFromHist(hist, total, 0.95);
-        if (pHi <= pLo)
-        {
-            pLo = Math.Max(0, pLo - 1);
-            pHi = Math.Min(255, pLo + 1);
-        }
-        double range = pHi - pLo;
-
-        Span<int> normalizedHist = stackalloc int[256];
-        normalizedHist.Clear();
-
-        unsafe
-        {
-            byte* basePtr = (byte*)pixmap.GetPixels();
-            int bpp = pixmap.Info.BytesPerPixel;
-            for (int y = 0; y < roi.Height; y++)
-            {
-                byte* row = basePtr + y * pixmap.RowBytes;
-                for (int x = 0; x < roi.Width; x++)
-                {
-                    byte B = row[x * bpp + 0];
-                    byte G = row[x * bpp + 1];
-                    byte R = row[x * bpp + 2];
-                    int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int darkness = 255 - luminance;
-                    double normalized = (darkness - pLo) / range;
-                    if (normalized < 0) normalized = 0;
-                    else if (normalized > 1) normalized = 1;
-                    int bucket = (int)Math.Round(normalized * 255.0);
-                    normalizedHist[bucket]++;
-                }
-            }
-        }
-
-        int threshold = OtsuThreshold(normalizedHist, total);
-
-        int blackPixels = 0;
-        unsafe
-        {
-            byte* basePtr = (byte*)pixmap.GetPixels();
-            int bpp = pixmap.Info.BytesPerPixel;
-            for (int y = 0; y < roi.Height; y++)
-            {
-                byte* row = basePtr + y * pixmap.RowBytes;
-                for (int x = 0; x < roi.Width; x++)
-                {
-                    byte B = row[x * bpp + 0];
-                    byte G = row[x * bpp + 1];
-                    byte R = row[x * bpp + 2];
-                    int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
-                    int darkness = 255 - luminance;
-                    double normalized = (darkness - pLo) / range;
-                    if (normalized < 0) normalized = 0;
-                    else if (normalized > 1) normalized = 1;
-                    int bucket = (int)Math.Round(normalized * 255.0);
-                    if (bucket >= threshold)
-                        blackPixels++;
-                }
-            }
-        }
-
-        double percentage = 100.0 * blackPixels / Math.Max(1, total);
-        if (double.IsNaN(percentage)) percentage = 0;
-        if (percentage < 0) percentage = 0;
-        else if (percentage > 100) percentage = 100;
-        return percentage;
-
-        static int PercentileFromHist(Span<int> histogram, int totalPixels, double percentile)
-        {
-            int target = (int)Math.Round(percentile * totalPixels);
-            int cumulative = 0;
-            for (int i = 0; i < 256; i++)
-            {
-                cumulative += histogram[i];
-                if (cumulative >= target)
-                    return i;
-            }
-            return 255;
-        }
-
-        static int OtsuThreshold(Span<int> histogram, int totalPixels)
-        {
-            double sum = 0;
-            for (int t = 0; t < 256; t++)
-                sum += t * histogram[t];
-
-            double sumBackground = 0;
-            int weightBackground = 0;
-            double maxVariance = -1;
-            int threshold = 128;
-
-            for (int t = 0; t < 256; t++)
-            {
-                weightBackground += histogram[t];
-                if (weightBackground == 0) continue;
-                int weightForeground = totalPixels - weightBackground;
-                if (weightForeground == 0) break;
-
-                sumBackground += t * histogram[t];
-                double meanBackground = sumBackground / weightBackground;
-                double meanForeground = (sum - sumBackground) / weightForeground;
-                double varianceBetween = weightBackground * weightForeground * (meanBackground - meanForeground) * (meanBackground - meanForeground);
-                if (varianceBetween > maxVariance)
-                {
-                    maxVariance = varianceBetween;
-                    threshold = t;
+                    byte* row = basePtr + y * pixmap.RowBytes;
+                    for (int x = 0; x < roi.Width; x++)
+                    {
+                        byte B = row[x * bpp + 0];
+                        byte G = row[x * bpp + 1];
+                        byte R = row[x * bpp + 2];
+                        int luminance = (int)Math.Round(0.2126 * R + 0.7152 * G + 0.0722 * B);
+                        int darkness = 255 - luminance;
+                        darknessBuffer[index++] = darkness;
+                        hist[darkness]++;
+                    }
                 }
             }
 
-            return threshold;
+            var (pLo, pHi) = calibration?.GetPercentileRange(hist, total)
+                               ?? ComputePercentileRange(hist, total);
+            if (pHi <= pLo)
+            {
+                pLo = Math.Max(0, pLo - 1);
+                pHi = Math.Min(255, pLo + 1);
+            }
+            double range = pHi - pLo;
+            if (range <= 0)
+                range = 1;
+
+            Span<int> normalizedHist = stackalloc int[256];
+            normalizedHist.Clear();
+
+            for (int i = 0; i < total; i++)
+            {
+                double normalized = (darknessBuffer[i] - pLo) / range;
+                if (normalized < 0) normalized = 0;
+                else if (normalized > 1) normalized = 1;
+                int bucket = (int)Math.Round(normalized * 255.0);
+                if (bucket < 0) bucket = 0;
+                else if (bucket > 255) bucket = 255;
+                normalizedHist[bucket]++;
+            }
+
+            int threshold = OtsuThreshold(normalizedHist, total);
+
+            int blackPixels = 0;
+            for (int bucket = threshold; bucket < 256; bucket++)
+                blackPixels += normalizedHist[bucket];
+
+            double percentage = 100.0 * blackPixels / Math.Max(1, total);
+            if (double.IsNaN(percentage)) percentage = 0;
+            if (percentage < 0) percentage = 0;
+            else if (percentage > 100) percentage = 100;
+            return percentage;
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(darknessBuffer);
         }
     }
 
+    private static (int pLo, int pHi) ComputePercentileRange(ReadOnlySpan<int> histogram, int totalPixels)
+    {
+        int pLo = PercentileFromHist(histogram, totalPixels, 0.05);
+        int pHi = PercentileFromHist(histogram, totalPixels, 0.95);
+        return (pLo, pHi);
+    }
+
+    private static int PercentileFromHist(ReadOnlySpan<int> histogram, int totalPixels, double percentile)
+    {
+        int target = (int)Math.Round(percentile * totalPixels);
+        int cumulative = 0;
+        for (int i = 0; i < 256; i++)
+        {
+            cumulative += histogram[i];
+            if (cumulative >= target)
+                return i;
+        }
+        return 255;
+    }
+
+    private static int OtsuThreshold(ReadOnlySpan<int> histogram, int totalPixels)
+    {
+        double sum = 0;
+        for (int t = 0; t < 256; t++)
+            sum += t * histogram[t];
+
+        double sumBackground = 0;
+        int weightBackground = 0;
+        double maxVariance = -1;
+        int threshold = 128;
+
+        for (int t = 0; t < 256; t++)
+        {
+            weightBackground += histogram[t];
+            if (weightBackground == 0) continue;
+            int weightForeground = totalPixels - weightBackground;
+            if (weightForeground == 0) break;
+
+            sumBackground += t * histogram[t];
+            double meanBackground = sumBackground / weightBackground;
+            double meanForeground = (sum - sumBackground) / weightForeground;
+            double varianceBetween = weightBackground * weightForeground * (meanBackground - meanForeground) * (meanBackground - meanForeground);
+            if (varianceBetween > maxVariance)
+            {
+                maxVariance = varianceBetween;
+                threshold = t;
+            }
+        }
+
+        return threshold;
+    }
+
+    private sealed class LocalContrastCalibration
+    {
+        private const int CalibrationSamples = 10;
+        private readonly int[] _aggregatedHistogram = new int[256];
+        private int _aggregatedTotal;
+        private int _samples;
+        private int? _cachedLo;
+        private int? _cachedHi;
+
+        public (int pLo, int pHi) GetPercentileRange(ReadOnlySpan<int> histogram, int totalPixels)
+        {
+            if (_cachedLo.HasValue && _cachedHi.HasValue)
+                return (_cachedLo.Value, _cachedHi.Value);
+
+            if (_samples < CalibrationSamples)
+            {
+                Accumulate(histogram, totalPixels);
+                var (pLo, pHi) = ComputePercentileRange(histogram, totalPixels);
+                if (_samples == CalibrationSamples)
+                    CacheAggregatedPercentiles();
+                return (pLo, pHi);
+            }
+
+            CacheAggregatedPercentiles();
+            return (_cachedLo!.Value, _cachedHi!.Value);
+        }
+
+        private void Accumulate(ReadOnlySpan<int> histogram, int totalPixels)
+        {
+            if (_samples >= CalibrationSamples)
+                return;
+
+            for (int i = 0; i < 256; i++)
+                _aggregatedHistogram[i] += histogram[i];
+            _aggregatedTotal += totalPixels;
+            _samples++;
+        }
+
+        private void CacheAggregatedPercentiles()
+        {
+            if (_cachedLo.HasValue && _cachedHi.HasValue)
+                return;
+
+            if (_aggregatedTotal <= 0)
+            {
+                _cachedLo = 0;
+                _cachedHi = 255;
+                return;
+            }
+
+            _cachedLo = PercentileFromHist(_aggregatedHistogram, _aggregatedTotal, 0.05);
+            _cachedHi = PercentileFromHist(_aggregatedHistogram, _aggregatedTotal, 0.95);
+
+            if (_cachedHi <= _cachedLo)
+            {
+                int adjustedLo = Math.Max(0, _cachedLo.Value - 1);
+                _cachedLo = adjustedLo;
+                _cachedHi = Math.Min(255, adjustedLo + 1);
+            }
+        }
+    }
     private struct Component
     {
         public int MinX;
